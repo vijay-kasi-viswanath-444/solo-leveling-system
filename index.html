@@ -346,28 +346,35 @@
       .streak {
         display: inline-flex;
         align-items: center;
-        gap: 4px;
-        border: 1px solid rgba(255, 193, 77, 0.5);
+        gap: 7px;
+        border: 1px solid rgba(255, 177, 58, 0.62);
         border-radius: 999px;
-        padding: 2px 7px;
-        background: rgba(58, 37, 10, 0.45);
-        min-width: 72px;
+        padding: 4px 10px 4px 8px;
+        background:
+          radial-gradient(circle at 22% 50%, rgba(255, 152, 56, 0.2), transparent 45%),
+          linear-gradient(145deg, rgba(61, 31, 7, 0.72), rgba(28, 18, 8, 0.78));
+        min-width: 94px;
         justify-content: center;
+        box-shadow:
+          0 0 14px rgba(255, 168, 69, 0.34),
+          inset 0 0 10px rgba(255, 130, 34, 0.2);
       }
 
       .streak-fire {
-        font-size: 0.72rem;
-        filter: drop-shadow(0 0 6px rgba(255, 157, 43, 0.7));
+        font-size: 0.9rem;
+        line-height: 1;
+        filter: drop-shadow(0 0 8px rgba(255, 157, 43, 0.7));
       }
 
       .streak-days {
-        color: #ffc44d;
+        color: #ffd06a;
         font-family: "Orbitron", sans-serif;
-        font-size: 0.62rem;
-        letter-spacing: 0.35px;
-        text-shadow: 0 0 8px rgba(255, 196, 77, 0.55);
+        font-size: 0.66rem;
+        letter-spacing: 0.45px;
+        text-shadow: 0 0 10px rgba(255, 196, 77, 0.62);
         text-transform: uppercase;
       }
+
 
       .level-panel {
         display: grid;
@@ -1683,7 +1690,8 @@
         min-height: 0;
         border-left: 2px solid rgba(103, 205, 255, 0.35);
         border-bottom: 2px solid rgba(103, 205, 255, 0.35);
-        padding: 4px 6px 6px 8px;
+        padding: 4px 6px 16px 8px;
+        overflow: visible;
         background: linear-gradient(
           180deg,
           rgba(103, 205, 255, 0.04),
@@ -1692,19 +1700,23 @@
       }
 
       .bar-wrap {
+        position: relative;
         display: grid;
-        grid-template-rows: 1fr auto auto;
+        grid-template-rows: 1fr;
         gap: 4px;
         min-height: 0;
+        justify-items: center;
       }
 
       .bar-track {
-        border: 1px solid rgba(103, 205, 255, 0.16);
-        border-radius: 6px;
-        background: rgba(8, 20, 44, 0.45);
+        width: 16px;
         position: relative;
-        overflow: hidden;
-        min-height: 92px;
+        min-height: 96px;
+        height: 100%;
+      }
+
+      .bar-track.zero {
+        opacity: 0.7;
       }
 
       .bar-fill {
@@ -1713,23 +1725,32 @@
         right: 0;
         bottom: 0;
         height: 0%;
-        background: linear-gradient(180deg, #69d6ff, #2f89ff);
-        box-shadow: 0 0 10px rgba(67, 217, 255, 0.35);
+        border-radius: 4px 4px 0 0;
+        background: linear-gradient(180deg, #7be4ff, #2f89ff);
+        box-shadow: 0 0 10px rgba(67, 217, 255, 0.42);
         transition: height 160ms ease;
       }
 
       .bar-label {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: -13px;
         text-align: center;
         color: #b4d1ef;
         font-size: 0.64rem;
         font-family: "Orbitron", sans-serif;
       }
 
-      .bar-value {
-        text-align: center;
-        color: rgba(183, 211, 243, 0.8);
+      .bar-top {
+        position: absolute;
+        left: 50%;
+        transform: translate(-50%, -100%);
+        color: rgba(183, 211, 243, 0.95);
         font-size: 0.56rem;
         font-family: "Orbitron", sans-serif;
+        white-space: nowrap;
+        text-shadow: 0 0 6px rgba(67, 217, 255, 0.3);
       }
 
       .calendar-wrap {
@@ -2029,8 +2050,7 @@
                   </div>
                   <p class="level-overcap" id="level-overcap" hidden>OVER +0</p>
                   <span class="streak"
-                    ><span class="streak-fire" aria-hidden="true"
-                      >&#128293;</span
+                    ><span class="streak-fire" aria-hidden="true">&#128293;</span
                     ><span class="streak-days" id="streak-days"
                       >0 DAYS</span
                     ></span
@@ -3128,6 +3148,7 @@
         const start = new Date(today);
         start.setDate(today.getDate() - 6);
         const counts = {};
+        const totalTasks = questList.querySelectorAll(".quest-item").length;
 
         questList.querySelectorAll(".quest-item.completed").forEach((item) => {
           const key = item.dataset.completedAt || "";
@@ -3136,20 +3157,22 @@
           }
         });
 
-        const maxVal = Math.max(5, ...Object.values(counts));
         for (let i = 0; i < 7; i += 1) {
           const day = new Date(start);
           day.setDate(start.getDate() + i);
           const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
           const count = counts[key] || 0;
-          const pct =
-            count === 0 ? 0 : Math.max(6, Math.round((count / maxVal) * 100));
+          const pct = totalTasks > 0
+            ? Math.max(0, Math.min(100, Math.round((count / totalTasks) * 100)))
+            : 0;
           const wrap = document.createElement("div");
           wrap.className = "bar-wrap";
+          const fillTopPx = 96 - ((pct / 100) * 96);
+          const topPx = Math.max(2, Math.min(96, fillTopPx));
           wrap.innerHTML = `
-          <div class="bar-track"><span class="bar-fill" style="height:${pct}%"></span></div>
+          <div class="bar-track${count === 0 ? " zero" : ""}"><span class="bar-fill" style="height:${pct}%"></span></div>
+          <p class="bar-top" style="top:${topPx}px;">${pct === 0 ? "" : `${pct}%`}</p>
           <p class="bar-label">${day.toLocaleDateString("en-US", { weekday: "short" }).slice(0, 3)}</p>
-          <p class="bar-value">${count}</p>
         `;
           weeklyBarsEl.appendChild(wrap);
         }
