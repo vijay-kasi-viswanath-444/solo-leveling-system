@@ -934,7 +934,7 @@
           inset 0 0 8px rgba(96, 179, 255, 0.1);
       }
 
-      .quest-act.done {
+      .quest-act.is-complete {
         border-color: rgba(122, 247, 107, 0.5);
         color: #8dff9a;
         box-shadow:
@@ -2886,6 +2886,7 @@
           const doneBtn = item.querySelector('[data-action="done"]');
           if (doneBtn) {
             doneBtn.textContent = "Undone";
+            doneBtn.classList.add("is-complete");
           }
         }
         questList.appendChild(item);
@@ -3409,7 +3410,7 @@
           <p class="quest-xp">+${xp} XP</p>
         </div>
         <div class="quest-actions-mini">
-          <button class="quest-act done" data-action="done" type="button">Done</button>
+          <button class="quest-act" data-action="done" type="button">Done</button>
           <div class="quest-menu">
             <button class="quest-menu-toggle" data-action="menu" type="button" aria-label="Task menu">&#8942;</button>
             <div class="quest-menu-pop">
@@ -3536,19 +3537,21 @@
           const xpReward = Number.parseInt(item.dataset.xp || "0", 10) || 0;
           const completed = item.dataset.completed === "true";
 
-          if (!completed) {
-            item.dataset.completed = "true";
-            item.dataset.completedAt = todayIso();
-            item.classList.add("completed");
-            btn.textContent = "Undone";
-            applyXpDelta(xpReward);
-          } else {
-            item.dataset.completed = "false";
-            item.dataset.completedAt = "";
-            item.classList.remove("completed");
-            btn.textContent = "Done";
-            applyXpDelta(-xpReward);
-          }
+        if (!completed) {
+          item.dataset.completed = "true";
+          item.dataset.completedAt = todayIso();
+          item.classList.add("completed");
+          btn.textContent = "Undone";
+          btn.classList.add("is-complete");
+          applyXpDelta(xpReward);
+        } else {
+          item.dataset.completed = "false";
+          item.dataset.completedAt = "";
+          item.classList.remove("completed");
+          btn.textContent = "Done";
+          btn.classList.remove("is-complete");
+          applyXpDelta(-xpReward);
+        }
           renderLevel();
           renderAnalytics();
           renderAchievements();
