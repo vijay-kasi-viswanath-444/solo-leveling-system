@@ -9,7 +9,7 @@
     <meta name="theme-color" content="#060b1d" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Hunter HUD" />
+    <meta name="apple-mobile-web-app-title" content="Solo Leveling System" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./assets/icons/icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="./assets/icons/icon-192.png" />
@@ -273,6 +273,62 @@
         color: #7af76b;
         font-size: 0.82rem;
         text-shadow: 0 0 8px rgba(122, 247, 107, 0.5);
+      }
+
+      #rank-display {
+        transition: color 180ms ease, text-shadow 180ms ease;
+      }
+
+      #rank-display.rank-e {
+        color: #8fd3ff;
+        text-shadow: 0 0 8px rgba(143, 211, 255, 0.55);
+      }
+
+      #rank-display.rank-d {
+        color: #6cf3d1;
+        text-shadow: 0 0 9px rgba(108, 243, 209, 0.58);
+      }
+
+      #rank-display.rank-c {
+        color: #86ff8c;
+        text-shadow: 0 0 10px rgba(134, 255, 140, 0.62);
+      }
+
+      #rank-display.rank-b {
+        color: #d5ff6f;
+        text-shadow: 0 0 11px rgba(213, 255, 111, 0.62);
+      }
+
+      #rank-display.rank-a {
+        color: #ffd56c;
+        text-shadow: 0 0 12px rgba(255, 213, 108, 0.65);
+      }
+
+      #rank-display.rank-s {
+        color: #ffb86e;
+        text-shadow: 0 0 13px rgba(255, 184, 110, 0.68);
+      }
+
+      #rank-display.rank-ss {
+        color: #ff8a7a;
+        text-shadow: 0 0 14px rgba(255, 138, 122, 0.7);
+      }
+
+      #rank-display.rank-sss {
+        color: #f294ff;
+        text-shadow: 0 0 16px rgba(242, 148, 255, 0.72);
+      }
+
+      #rank-display.rank-sssplus {
+        color: #bc9dff;
+        text-shadow: 0 0 18px rgba(188, 157, 255, 0.75);
+      }
+
+      #rank-display.rank-monarch {
+        color: #7af76b;
+        text-shadow:
+          0 0 14px rgba(122, 247, 107, 0.75),
+          0 0 24px rgba(67, 217, 255, 0.35);
       }
 
       .mini-resources {
@@ -2892,9 +2948,6 @@
           authStatus.textContent = isLogged
             ? `Logged in: ${user.displayName || user.email}`
             : "Not logged in";
-          if (isLogged && user.displayName) {
-            hunterNameInput.value = user.displayName;
-          }
           authGoogleBtn.textContent = defaultGoogleBtnText;
           authGoogleBtn.style.display = isLogged ? "none" : "";
           authGoogleBtn.disabled = isLogged;
@@ -3072,6 +3125,10 @@
         }
         isHydratingFromCloud = true;
         try {
+          const authName =
+            firebase.auth().currentUser?.displayName ||
+            firebase.auth().currentUser?.email ||
+            "";
           const snap = await db
             .collection("users")
             .doc(uid)
@@ -3079,16 +3136,17 @@
             .doc("main")
             .get();
           if (!snap.exists) {
+            hunterNameInput.value = String(
+              (hunterNameInput.value || "").trim() || authName || "Sung Jinwoo",
+            );
             isHydratingFromCloud = false;
             await saveUserData();
             return;
           }
-        const data = snap.data() || {};
-        const authName =
-          firebase.auth().currentUser?.displayName ||
-          firebase.auth().currentUser?.email ||
-          "";
-        hunterNameInput.value = String(data.name || authName || "Sung Jinwoo");
+          const data = snap.data() || {};
+          const cloudName =
+            typeof data.name === "string" ? data.name.trim() : "";
+          hunterNameInput.value = String(cloudName || authName || "Sung Jinwoo");
           trueLevel = Math.max(
             0,
             Number.parseInt(String(data.trueLevel || "0"), 10) || 0,
@@ -4167,6 +4225,31 @@
 
         refs.levelNum.textContent = String(displayLevel);
         refs.rank.textContent = rank;
+        refs.rank.classList.remove(
+          "rank-e",
+          "rank-d",
+          "rank-c",
+          "rank-b",
+          "rank-a",
+          "rank-s",
+          "rank-ss",
+          "rank-sss",
+          "rank-sssplus",
+          "rank-monarch",
+        );
+        const rankClassMap = {
+          E: "rank-e",
+          D: "rank-d",
+          C: "rank-c",
+          B: "rank-b",
+          A: "rank-a",
+          S: "rank-s",
+          SS: "rank-ss",
+          SSS: "rank-sss",
+          "SSS+": "rank-sssplus",
+          Monarch: "rank-monarch",
+        };
+        refs.rank.classList.add(rankClassMap[rank] || "rank-e");
         refs.job.textContent = jobByRank[rank];
         refs.title.textContent = titleFromLevel(trueLevel);
         refs.levelRing.style.setProperty("--level-progress", `${progress}%`);
@@ -4249,9 +4332,45 @@
     initLevelParticles();
     setInterval(maybeFireNotifications, 30000);
 
-    if ("serviceWorker" in navigator && (window.location.protocol === "https:" || window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")) {
+    if (
+      "serviceWorker" in navigator &&
+      (window.location.protocol === "https:" ||
+        window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1")
+    ) {
       window.addEventListener("load", () => {
-        navigator.serviceWorker.register("./sw.js").catch(() => {});
+        let refreshing = false;
+        navigator.serviceWorker.addEventListener("controllerchange", () => {
+          if (refreshing) {
+            return;
+          }
+          refreshing = true;
+          window.location.reload();
+        });
+
+        navigator.serviceWorker
+          .register("./sw.js")
+          .then((registration) => {
+            registration.update();
+            if (registration.waiting) {
+              registration.waiting.postMessage({ type: "SKIP_WAITING" });
+            }
+            registration.addEventListener("updatefound", () => {
+              const newWorker = registration.installing;
+              if (!newWorker) {
+                return;
+              }
+              newWorker.addEventListener("statechange", () => {
+                if (
+                  newWorker.state === "installed" &&
+                  navigator.serviceWorker.controller
+                ) {
+                  newWorker.postMessage({ type: "SKIP_WAITING" });
+                }
+              });
+            });
+          })
+          .catch(() => {});
       });
     }
   </script>

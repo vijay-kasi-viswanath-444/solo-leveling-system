@@ -1,6 +1,6 @@
 {
-  "name": "Hunter Mobile HUD",
-  "short_name": "Hunter HUD",
+  "name": "Solo Leveling System",
+  "short_name": "Solo Leveling",
   "description": "Solo leveling style hunter progress app",
   "start_url": "./index.html#home",
   "display": "standalone",

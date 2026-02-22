@@ -1,4 +1,4 @@
-# Hunter Mobile HUD
+# Solo Leveling System
 
 Solo Leveling inspired mobile-first web app with:
 - Hunter profile (level, rank, title, XP, streak)
