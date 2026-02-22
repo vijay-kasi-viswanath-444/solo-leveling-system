@@ -941,8 +941,8 @@
         -webkit-backdrop-filter: blur(8px);
         padding: 10px 10px 8px;
         overflow: hidden;
-        display: grid;
-        grid-template-rows: auto 1fr;
+        display: flex;
+        flex-direction: column;
         gap: 8px;
       }
 
@@ -967,12 +967,24 @@
         z-index: 1;
       }
 
+      .penalty-note {
+        margin-top: 2px;
+        font-size: 0.64rem;
+        color: rgba(255, 191, 132, 0.92);
+        text-shadow: 0 0 8px rgba(255, 143, 64, 0.28);
+        letter-spacing: 0.2px;
+        position: relative;
+        z-index: 1;
+      }
+
       .quest-list {
         height: 100%;
+        flex: 1;
+        min-height: 0;
         overflow-y: auto;
         padding: 2px 2px 78px;
-        display: grid;
-        align-content: start;
+        display: flex;
+        flex-direction: column;
         gap: 8px;
         position: relative;
         z-index: 1;
@@ -1008,7 +1020,7 @@
         display: flex;
         align-items: center;
         gap: 10px;
-        font-size: 0.95rem;
+        font-size: 1.15rem;
       }
 
       .quest-main {
@@ -1020,7 +1032,7 @@
       .quest-item .name {
         color: #e9f6ff;
         font-weight: 700;
-        font-size: 0.92rem;
+        font-size: 1.06rem;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -1042,16 +1054,16 @@
 
       .quest-stats {
         text-align: left;
-        min-width: 64px;
+        min-width: 52px;
         display: grid;
-        gap: 4px;
+        gap: 2px;
         justify-items: start;
       }
 
       .quest-reps {
         color: #eef8ff;
         font-family: "Orbitron", sans-serif;
-        font-size: 0.98rem;
+        font-size: 0.86rem;
         line-height: 1;
       }
 
@@ -1059,7 +1071,7 @@
         margin-top: 2px;
         color: #67b7ff;
         font-family: "Orbitron", sans-serif;
-        font-size: 0.72rem;
+        font-size: 0.64rem;
         letter-spacing: 0.3px;
       }
 
@@ -2264,6 +2276,9 @@
                 + Create Task
               </button>
             </div>
+            <p class="penalty-note" id="penalty-note">
+              Penalty starts only after missed tasks. Keep daily completion to avoid XP cuts.
+            </p>
             <div class="shadow-summon quest-bg" id="shadow-summon" aria-hidden="true">
               <div class="aura"></div>
               <div class="shadow-figure"></div>
@@ -2733,6 +2748,8 @@
       const overallPreview = document.getElementById("overall-preview");
       const questList = document.getElementById("quest-list");
       const questEmpty = document.getElementById("quest-empty");
+      const systemLogsEl = document.getElementById("system-logs");
+      const penaltyNoteEl = document.getElementById("penalty-note");
       const hunterNameInput = document.getElementById("hunter-name-input");
       const authGoogleBtn = document.getElementById("auth-google-btn");
       const authLogoutBtn = document.getElementById("auth-logout-btn");
@@ -3005,6 +3022,179 @@
         });
       }
 
+      function addSystemLog(message) {
+        if (!systemLogsEl) {
+          return;
+        }
+        const stamp = new Date().toLocaleTimeString("en-US", {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+        const item = document.createElement("p");
+        item.className = "log-item";
+        item.textContent = `[${stamp}] ${message}`;
+        systemLogsEl.prepend(item);
+        while (systemLogsEl.children.length > 30) {
+          systemLogsEl.removeChild(systemLogsEl.lastElementChild);
+        }
+      }
+
+      function isoDaysAgo(days) {
+        const d = new Date();
+        d.setHours(0, 0, 0, 0);
+        d.setDate(d.getDate() - days);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      }
+
+      function penaltyStateKey() {
+        const scope = currentUserId || "guest";
+        return `sls_penalty_state_${PENALTY_STATE_VERSION}_${scope}`;
+      }
+
+      function readPenaltyState() {
+        try {
+          const raw = localStorage.getItem(penaltyStateKey());
+          return raw ? JSON.parse(raw) : null;
+        } catch (_) {
+          return null;
+        }
+      }
+
+      function writePenaltyState(state) {
+        try {
+          localStorage.setItem(penaltyStateKey(), JSON.stringify(state));
+        } catch (_) {
+        }
+      }
+
+      function getPenaltyStreak() {
+        const state = readPenaltyState();
+        return Math.max(0, Number.parseInt(String(state?.penaltyStreak || 0), 10) || 0);
+      }
+
+      function getPenaltyMultiplier(streak) {
+        if (streak <= 0) {
+          return 1;
+        }
+        if (streak === 1) {
+          return 0.5;
+        }
+        if (streak >= 7) {
+          return 0.25;
+        }
+        if (streak >= 4) {
+          return 0.35;
+        }
+        if (streak >= 2) {
+          return 0.4;
+        }
+        return 1;
+      }
+
+      function getCurrentPenaltyInfo() {
+        const streak = getPenaltyStreak();
+        const multiplier = getPenaltyMultiplier(streak);
+        const cutPct = Math.round((1 - multiplier) * 100);
+        return { streak, multiplier, cutPct };
+      }
+
+      function effectiveTaskXp(baseXp) {
+        const safeBase = Math.max(0, Number.parseInt(String(baseXp || 0), 10) || 0);
+        const { multiplier } = getCurrentPenaltyInfo();
+        return Math.max(1, Math.round(safeBase * multiplier));
+      }
+
+      function refreshPenaltyNote() {
+        if (!penaltyNoteEl) {
+          return;
+        }
+        const { streak, cutPct } = getCurrentPenaltyInfo();
+        if (streak <= 0) {
+          penaltyNoteEl.textContent =
+            "Penalty inactive. Missed daily tasks will reduce future task XP.";
+          return;
+        }
+        const extra =
+          streak >= 7
+            ? " Severe penalty tier."
+            : streak >= 4
+              ? " High penalty tier."
+              : streak >= 2
+                ? " Escalated penalty tier."
+                : "";
+        penaltyNoteEl.textContent = `Penalty: -${cutPct}% task XP | Penalty streak: ${streak} day${streak === 1 ? "" : "s"}.${extra}`;
+      }
+
+      function refreshQuestXpDisplay() {
+        questList.querySelectorAll(".quest-item").forEach((item) => {
+          if (item.dataset.completed === "true") {
+            return;
+          }
+          const baseXp = Number.parseInt(item.dataset.baseXp || item.dataset.xp || "0", 10) || 0;
+          const currentXp = effectiveTaskXp(baseXp);
+          item.dataset.xp = String(currentXp);
+          const xpEl = item.querySelector(".quest-xp");
+          if (xpEl) {
+            xpEl.textContent = `+${currentXp} XP`;
+          }
+        });
+      }
+
+      function countCompletedForDate(dateKey) {
+        let count = 0;
+        questList.querySelectorAll(".quest-item.completed").forEach((item) => {
+          if ((item.dataset.completedAt || "") === dateKey) {
+            count += 1;
+          }
+        });
+        return count;
+      }
+
+      function applyDailyPenaltyIfDue() {
+        const targetDate = isoDaysAgo(1);
+        const state = readPenaltyState() || {};
+        const prevStreak = Math.max(0, Number.parseInt(String(state.penaltyStreak || 0), 10) || 0);
+        if (!state.lastProcessedDate) {
+          writePenaltyState({ lastProcessedDate: targetDate, penaltyStreak: prevStreak });
+          refreshPenaltyNote();
+          refreshQuestXpDisplay();
+          updateCountsAndPreview();
+          return;
+        }
+        if (state.lastProcessedDate === targetDate) {
+          refreshPenaltyNote();
+          refreshQuestXpDisplay();
+          updateCountsAndPreview();
+          return;
+        }
+
+        const totalTasks = questList.querySelectorAll(".quest-item").length;
+        const completed = countCompletedForDate(targetDate);
+        const missed = Math.max(0, totalTasks - completed);
+        let nextStreak = 0;
+        if (totalTasks > 0 && missed > 0) {
+          nextStreak = prevStreak + 1;
+          const penaltyXp = missed * PENALTY_XP_PER_MISSED_TASK;
+          applyXpDelta(-penaltyXp);
+          addSystemLog(
+            `[PENALTY] -${penaltyXp} XP for ${missed} missed task${missed > 1 ? "s" : ""} (${targetDate}).`,
+          );
+          renderLevel();
+          renderAnalytics();
+          renderAchievements();
+        } else {
+          nextStreak = 0;
+          if (prevStreak > 0) {
+            addSystemLog("[PENALTY] Streak reset. Full recovery started.");
+          }
+        }
+        writePenaltyState({ lastProcessedDate: targetDate, penaltyStreak: nextStreak });
+        refreshPenaltyNote();
+        refreshQuestXpDisplay();
+        updateCountsAndPreview();
+        queueSaveUserData();
+      }
+
       function clearQuestList() {
         questList
           .querySelectorAll(".quest-item")
@@ -3012,6 +3202,13 @@
         if (questEmpty) {
           questEmpty.style.display = "block";
         }
+      }
+
+      function reflowQuestList() {
+        const items = Array.from(questList.querySelectorAll(".quest-item"));
+        items.forEach((item) => {
+          questList.appendChild(item);
+        });
       }
 
       function getAttrFromItem(item) {
@@ -3028,8 +3225,10 @@
           title: item.querySelector(".name")?.textContent || "Untitled",
           reps: item.querySelector(".quest-reps")?.textContent || "0",
           attrKey: getAttrFromItem(item),
+          baseXp: Number.parseInt(item.dataset.baseXp || item.dataset.xp || "0", 10) || 0,
           xp: Number.parseInt(item.dataset.xp || "0", 10) || 0,
           completed: item.dataset.completed === "true",
+          appliedXp: Number.parseInt(item.dataset.appliedXp || "0", 10) || 0,
           completedAt: item.dataset.completedAt || "",
           reminderOn: item.dataset.reminderOn === "true",
           reminderTime: item.dataset.reminderTime || "09:00",
@@ -3039,14 +3238,20 @@
       }
 
       function applyQuestData(data) {
+        const baseXp = Number.parseInt(String(data.baseXp || data.xp || "0"), 10) || 0;
+        const adjustedXp = effectiveTaskXp(baseXp);
         const item = createQuestItem({
           title: String(data.title || "Untitled"),
           reps: String(data.reps || "0"),
           attrKey: String(data.attrKey || "STR"),
-          xp: Number.parseInt(String(data.xp || "0"), 10) || 0,
+          baseXp,
+          xp: adjustedXp,
         });
         const completed = Boolean(data.completed);
         item.dataset.completed = completed ? "true" : "false";
+        item.dataset.appliedXp = String(
+          Number.parseInt(String(data.appliedXp || adjustedXp), 10) || adjustedXp,
+        );
         item.dataset.completedAt = completed
           ? String(data.completedAt || "")
           : "";
@@ -3084,6 +3289,7 @@
           name: cleanName,
           trueLevel,
           xpIntoLevel,
+          penaltyStreak: getPenaltyStreak(),
           quests,
           updatedAtClient: nowIso,
           lastSyncAtISO: nowIso,
@@ -3147,6 +3353,13 @@
           const cloudName =
             typeof data.name === "string" ? data.name.trim() : "";
           hunterNameInput.value = String(cloudName || authName || "Sung Jinwoo");
+          const cloudPenaltyStreak =
+            Math.max(0, Number.parseInt(String(data.penaltyStreak || "0"), 10) || 0);
+          const localPenalty = readPenaltyState() || {};
+          writePenaltyState({
+            lastProcessedDate: localPenalty.lastProcessedDate || isoDaysAgo(1),
+            penaltyStreak: cloudPenaltyStreak,
+          });
           trueLevel = Math.max(
             0,
             Number.parseInt(String(data.trueLevel || "0"), 10) || 0,
@@ -3178,6 +3391,7 @@
           authStatus.textContent = `Cloud load failed: ${err.message}`;
         } finally {
           isHydratingFromCloud = false;
+          applyDailyPenaltyIfDue();
           renderLevel();
           renderAnalytics();
           renderAchievements();
@@ -3516,14 +3730,14 @@
 
       function currentTaskXp() {
         const base = xpByAttribute[attributeSelect.value] || 0;
-        return base;
+        return effectiveTaskXp(base);
       }
 
       function currentOverallTaskXp() {
         const base = xpByAttribute[overallAttributeSelect.value] || 0;
         const minutes = Number.parseInt(durationInput.value, 10) || 0;
         const timeFactor = Math.max(1, Math.ceil(minutes / 15));
-        return base * timeFactor;
+        return effectiveTaskXp(base * timeFactor);
       }
 
       function setAttributeStyle(selectEl, iconEl, wrapEl) {
@@ -3573,11 +3787,13 @@
         }
       }
 
-      function createQuestItem({ title, reps, attrKey, xp }) {
+      function createQuestItem({ title, reps, attrKey, baseXp, xp }) {
         const attribute = attributeLabel[attrKey] || attrKey;
         const item = document.createElement("article");
         item.className = `quest-item attr-${String(attrKey).toLowerCase()}`;
+        item.dataset.baseXp = String(baseXp);
         item.dataset.xp = String(xp);
+        item.dataset.appliedXp = "0";
         item.dataset.completed = "false";
         item.dataset.completedAt = "";
         item.dataset.reminderOn = "false";
@@ -3621,8 +3837,9 @@
           { title: "10 km Run", reps: "10 km", attrKey: "PER" },
         ];
         defaults.forEach((task) => {
-          const xp = xpByAttribute[task.attrKey] || 0;
-          questList.appendChild(createQuestItem({ ...task, xp }));
+          const baseXp = xpByAttribute[task.attrKey] || 0;
+          const xp = effectiveTaskXp(baseXp);
+          questList.appendChild(createQuestItem({ ...task, baseXp, xp }));
         });
         if (questEmpty) {
           questEmpty.style.display = "none";
@@ -3642,8 +3859,10 @@
         const attrKey = isSingle
           ? attributeSelect.value
           : overallAttributeSelect.value;
-        const attribute = attributeLabel[attrKey] || attrKey;
-        const xp = isSingle ? currentTaskXp() : currentOverallTaskXp();
+        const baseXp = isSingle
+          ? xpByAttribute[attrKey] || 0
+          : (xpByAttribute[attrKey] || 0) * Math.max(1, Math.ceil((Number.parseInt(durationInput.value, 10) || 0) / 15));
+        const xp = effectiveTaskXp(baseXp);
 
         if (!title) {
           (isSingle ? taskTitleInput : overallTitleInput).focus();
@@ -3657,8 +3876,9 @@
         }
         repsInput.classList.remove("invalid");
 
-        const item = createQuestItem({ title, reps, attrKey, xp });
+        const item = createQuestItem({ title, reps, attrKey, baseXp, xp });
         questList.appendChild(item);
+        reflowQuestList();
         if (questEmpty) {
           questEmpty.style.display = "none";
         }
@@ -3708,6 +3928,7 @@
 
         if (btn.dataset.action === "delete") {
           item.remove();
+          reflowQuestList();
           if (
             questList.querySelectorAll(".quest-item").length === 0 &&
             questEmpty
@@ -3720,20 +3941,24 @@
           return;
         }
 
-        if (btn.dataset.action === "done") {
-          const xpReward = Number.parseInt(item.dataset.xp || "0", 10) || 0;
-          const completed = item.dataset.completed === "true";
+      if (btn.dataset.action === "done") {
+        const completed = item.dataset.completed === "true";
 
         if (!completed) {
+          const xpReward = Number.parseInt(item.dataset.xp || "0", 10) || 0;
           item.dataset.completed = "true";
           item.dataset.completedAt = todayIso();
+          item.dataset.appliedXp = String(xpReward);
           item.classList.add("completed");
           btn.textContent = "Undone";
           btn.classList.add("is-complete");
           applyXpDelta(xpReward);
         } else {
+          const xpReward =
+            Number.parseInt(item.dataset.appliedXp || item.dataset.xp || "0", 10) || 0;
           item.dataset.completed = "false";
           item.dataset.completedAt = "";
+          item.dataset.appliedXp = "0";
           item.classList.remove("completed");
           btn.textContent = "Done";
           btn.classList.remove("is-complete");
@@ -3859,6 +4084,8 @@
       const MAX_DISPLAY_LEVEL = 200;
       const MAX_INTERNAL_LEVEL = 999;
       const XP_PER_LEVEL = 100;
+      const PENALTY_XP_PER_MISSED_TASK = 8;
+      const PENALTY_STATE_VERSION = "v1";
       let trueLevel = 0;
       let xpIntoLevel = 0;
 
@@ -4323,6 +4550,7 @@
       renderLevel();
       updateCountsAndPreview();
       seedDefaultTasks();
+      applyDailyPenaltyIfDue();
       initFirebaseAuth();
       renderAnalytics();
     renderAchievements();
@@ -4334,9 +4562,7 @@
 
     if (
       "serviceWorker" in navigator &&
-      (window.location.protocol === "https:" ||
-        window.location.hostname === "localhost" ||
-        window.location.hostname === "127.0.0.1")
+      window.location.protocol === "https:"
     ) {
       window.addEventListener("load", () => {
         let refreshing = false;
@@ -4348,8 +4574,9 @@
           window.location.reload();
         });
 
+        const swVersion = "2026-02-22-2";
         navigator.serviceWorker
-          .register("./sw.js")
+          .register(`./sw.js?v=${swVersion}`)
           .then((registration) => {
             registration.update();
             if (registration.waiting) {
