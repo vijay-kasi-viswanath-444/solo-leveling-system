@@ -1,0 +1,3800 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <title>Hunter Mobile HUD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Rajdhani:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg-1: #060b1d;
+        --bg-2: #0f1c3a;
+        --panel: rgba(11, 23, 49, 0.84);
+        --line: rgba(103, 205, 255, 0.35);
+        --text: #d9ecff;
+        --muted: #8eb0d8;
+        --accent: #43d9ff;
+        --urgent: #ff5a75;
+        --ok: #7af76b;
+        --bonus: #4dff76;
+        --nav-h: 76px;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+
+      body {
+        font-family: "Rajdhani", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(
+            circle at 20% 15%,
+            rgba(67, 217, 255, 0.24),
+            transparent 35%
+          ),
+          radial-gradient(
+            circle at 80% 90%,
+            rgba(122, 247, 107, 0.1),
+            transparent 30%
+          ),
+          radial-gradient(
+            circle at 50% 50%,
+            rgba(94, 62, 255, 0.14),
+            transparent 60%
+          ),
+          linear-gradient(135deg, var(--bg-1), var(--bg-2));
+      }
+
+      .app {
+        height: 100dvh;
+        display: grid;
+        grid-template-rows: 1fr var(--nav-h);
+        overflow: hidden;
+        position: relative;
+      }
+
+      .views {
+        height: 100%;
+        overflow: hidden;
+        padding: 14px 14px 8px;
+        position: relative;
+      }
+
+      .view {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        transform: translateY(8px) scale(0.995);
+        pointer-events: none;
+        transition:
+          opacity 180ms ease,
+          transform 220ms ease;
+      }
+
+      .view.active {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        pointer-events: auto;
+      }
+
+      .view > .card,
+      .view > .quests-shell {
+        height: 100%;
+      }
+
+      .title {
+        font-family: "Orbitron", sans-serif;
+        font-size: 1rem;
+        letter-spacing: 0.8px;
+        text-transform: uppercase;
+        color: var(--accent);
+      }
+
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--panel);
+        box-shadow:
+          inset 0 0 22px rgba(67, 217, 255, 0.1),
+          0 0 20px rgba(67, 217, 255, 0.2);
+        padding: 14px;
+        min-height: 0;
+        overflow: hidden;
+      }
+
+      .home-layout {
+        display: grid;
+        grid-template-rows: 0.78fr 1fr;
+        gap: 10px;
+        min-height: 0;
+      }
+
+      .home-top {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        grid-template-rows: auto auto;
+        align-items: start;
+        gap: 10px;
+        border: 1px solid rgba(103, 205, 255, 0.35);
+        border-radius: 10px;
+        background: linear-gradient(
+          160deg,
+          rgba(16, 36, 72, 0.72),
+          rgba(10, 24, 52, 0.7)
+        );
+        box-shadow: inset 0 0 14px rgba(67, 217, 255, 0.1);
+        padding: 10px;
+      }
+
+      .hunter-head {
+        min-width: 0;
+        display: grid;
+        gap: 4px;
+        grid-column: 1;
+        grid-row: 1;
+      }
+
+      .hunter-row {
+        display: grid;
+        grid-template-columns: 44px 1fr;
+        align-items: center;
+        gap: 8px;
+        padding: 2px 0;
+      }
+
+      .hunter-key {
+        color: var(--muted);
+        font-size: 0.78rem;
+        letter-spacing: 0.6px;
+        text-transform: uppercase;
+      }
+
+      .hunter-val {
+        font-family: "Orbitron", sans-serif;
+        font-size: 0.88rem;
+        letter-spacing: 0.4px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .hunter-input,
+      .hunter-select {
+        width: 100%;
+        border: 1px solid rgba(103, 205, 255, 0.25);
+        border-radius: 7px;
+        background: rgba(8, 20, 44, 0.62);
+        color: #9fd7ff;
+        padding: 3px 6px;
+        outline: none;
+        font: inherit;
+        letter-spacing: inherit;
+      }
+
+      .hunter-select {
+        appearance: none;
+      }
+
+      .row-name .hunter-val {
+        color: #8ee7ff;
+        font-size: 1.08rem;
+        text-shadow: 0 0 12px rgba(67, 217, 255, 0.5);
+      }
+
+      .row-job .hunter-val {
+        color: #9fd7ff;
+        font-size: 0.76rem;
+        letter-spacing: 0.2px;
+        text-shadow: 0 0 9px rgba(67, 217, 255, 0.32);
+      }
+
+      .row-title .hunter-val {
+        color: #9fd7ff;
+        font-size: 0.76rem;
+        letter-spacing: 0.2px;
+        text-shadow: 0 0 9px rgba(67, 217, 255, 0.32);
+      }
+
+      .row-rank .hunter-val {
+        color: #7af76b;
+        font-size: 0.82rem;
+        text-shadow: 0 0 8px rgba(122, 247, 107, 0.5);
+      }
+
+      .mini-resources {
+        margin-top: 0;
+        display: grid;
+        gap: 5px;
+        width: 100%;
+        grid-column: 1;
+        grid-row: 2;
+      }
+
+      .mini-row {
+        display: grid;
+        grid-template-columns: 14px minmax(0, 1fr);
+        align-items: center;
+        gap: 5px;
+        flex: 1;
+        width: 100%;
+      }
+
+      .mini-icon {
+        color: var(--accent);
+        font-size: 0.78rem;
+        text-align: center;
+        text-shadow: 0 0 8px rgba(67, 217, 255, 0.4);
+      }
+
+      .mini-bar {
+        height: 9px;
+        border-radius: 999px;
+        border: 1px solid rgba(103, 205, 255, 0.25);
+        background: rgba(8, 20, 44, 0.7);
+        overflow: hidden;
+        width: 100%;
+        position: relative;
+      }
+
+      .mini-fill {
+        display: block;
+        height: 100%;
+        border-radius: inherit;
+      }
+
+      .mini-fill.xp {
+        width: 0;
+        background: linear-gradient(90deg, #39c8ff, #7bf7ff);
+      }
+
+      .mini-val {
+        position: absolute;
+        right: 5px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-family: "Orbitron", sans-serif;
+        font-size: 0.54rem;
+        color: #d9ecff;
+        letter-spacing: 0.3px;
+        min-width: 0;
+        text-align: right;
+        text-shadow: 0 0 6px rgba(67, 217, 255, 0.45);
+        z-index: 2;
+      }
+
+      .xp-total {
+        font-family: "Orbitron", sans-serif;
+        font-size: 0.58rem;
+        color: #9cc9f3;
+        letter-spacing: 0.35px;
+        text-align: left;
+      }
+
+      .streak {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border: 1px solid rgba(255, 193, 77, 0.5);
+        border-radius: 999px;
+        padding: 2px 7px;
+        background: rgba(58, 37, 10, 0.45);
+        min-width: 72px;
+        justify-content: center;
+      }
+
+      .streak-fire {
+        font-size: 0.72rem;
+        filter: drop-shadow(0 0 6px rgba(255, 157, 43, 0.7));
+      }
+
+      .streak-days {
+        color: #ffc44d;
+        font-family: "Orbitron", sans-serif;
+        font-size: 0.62rem;
+        letter-spacing: 0.35px;
+        text-shadow: 0 0 8px rgba(255, 196, 77, 0.55);
+        text-transform: uppercase;
+      }
+
+      .level-panel {
+        display: grid;
+        grid-template-columns: auto;
+        align-items: center;
+        justify-items: end;
+        gap: 4px;
+        align-self: stretch;
+        margin-top: 0;
+        grid-column: 2;
+        grid-row: 1 / span 2;
+      }
+
+      .level-ring .level-num {
+        font-family: "Orbitron", sans-serif;
+        font-size: 1.9rem;
+        line-height: 1;
+        color: var(--text);
+        text-shadow: 0 0 18px rgba(67, 217, 255, 0.58);
+      }
+
+      .level-ring .level-label {
+        margin-top: 2px;
+        font-size: 0.62rem;
+        letter-spacing: 0.8px;
+        color: var(--muted);
+        text-transform: uppercase;
+      }
+
+      .level-ring {
+        width: 104px;
+        aspect-ratio: 1;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        background:
+          radial-gradient(
+            circle at center,
+            rgba(8, 18, 38, 0.96) 66%,
+            transparent 67%
+          ),
+          conic-gradient(
+            var(--accent) 0 var(--level-progress, 0%),
+            rgba(103, 205, 255, 0.16) var(--level-progress, 0%) 100%
+          );
+        border: 1px solid rgba(103, 205, 255, 0.45);
+        box-shadow:
+          0 0 24px rgba(67, 217, 255, 0.48),
+          inset 0 0 12px rgba(67, 217, 255, 0.2);
+      }
+
+      .ring-core {
+        display: grid;
+        place-items: center;
+        text-align: center;
+        line-height: 1;
+      }
+
+      .level-overcap {
+        font-family: "Orbitron", sans-serif;
+        font-size: 0.58rem;
+        color: #7af76b;
+        letter-spacing: 0.5px;
+        text-shadow: 0 0 8px rgba(122, 247, 107, 0.45);
+      }
+
+      #hunter-name-input {
+        border: 0;
+        background: transparent;
+        box-shadow: none;
+        padding-left: 0;
+        padding-right: 0;
+      }
+
+      .home-block {
+        border: 1px solid rgba(103, 205, 255, 0.22);
+        border-radius: 10px;
+        background: linear-gradient(
+          160deg,
+          rgba(16, 36, 72, 0.66),
+          rgba(10, 24, 52, 0.7)
+        );
+        box-shadow: inset 0 0 14px rgba(67, 217, 255, 0.08);
+        padding: 10px;
+        display: grid;
+        gap: 8px;
+        align-content: start;
+        min-height: 0;
+      }
+
+      .home-bottom {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        min-height: 0;
+      }
+
+      .block-title {
+        font-family: "Orbitron", sans-serif;
+        font-size: 0.78rem;
+        color: var(--accent);
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+      }
+
+      .line {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.95rem;
+        border-bottom: 1px solid rgba(103, 205, 255, 0.12);
+        padding-bottom: 4px;
+      }
+
+      .line:last-child {
+        border-bottom: 0;
+        padding-bottom: 0;
+      }
+
+      .line span:first-child {
+        color: var(--muted);
+      }
+
+      .points {
+        display: grid;
+        gap: 8px;
+        align-content: start;
+      }
+
+      .point {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        align-items: center;
+        gap: 8px;
+        border: 1px solid rgba(103, 205, 255, 0.2);
+        border-radius: 8px;
+        background: rgba(8, 20, 44, 0.84);
+        padding: 6px 8px;
+      }
+
+      .sigil {
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        border: 1px solid rgba(103, 205, 255, 0.35);
+        display: grid;
+        place-items: center;
+        color: var(--accent);
+        font-size: 0.78rem;
+        background: rgba(67, 217, 255, 0.08);
+      }
+
+      .point-name {
+        color: var(--muted);
+        font-size: 0.88rem;
+        letter-spacing: 0.5px;
+      }
+
+      .point-val {
+        font-family: "Orbitron", sans-serif;
+        font-size: 0.88rem;
+        color: var(--text);
+        display: flex;
+        align-items: baseline;
+        gap: 4px;
+      }
+
+      .bonus {
+        color: var(--bonus);
+        font-size: 0.74rem;
+        text-shadow: 0 0 8px rgba(77, 255, 118, 0.55);
+      }
+
+      .stats-form {
+        display: grid;
+        gap: 7px;
+        align-content: start;
+      }
+
+      .field {
+        display: grid;
+        grid-template-columns: 40px 1fr;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .field label {
+        color: var(--muted);
+        font-size: 0.86rem;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+      }
+
+      .field input {
+        width: 100%;
+        border: 1px solid rgba(103, 205, 255, 0.24);
+        border-radius: 8px;
+        background: rgba(8, 20, 44, 0.85);
+        color: var(--text);
+        padding: 6px 8px;
+        font-family: "Orbitron", sans-serif;
+        font-size: 0.88rem;
+        outline: none;
+      }
+
+      .field input[readonly] {
+        cursor: default;
+      }
+
+      .radar-wrap {
+        position: relative;
+        height: 100%;
+        min-height: 0;
+        display: grid;
+        place-items: center;
+      }
+
+      .radar {
+        width: 100%;
+        height: 100%;
+        max-height: 230px;
+      }
+
+      .radar text {
+        fill: var(--muted);
+        font-size: 10px;
+        font-family: "Orbitron", sans-serif;
+        letter-spacing: 0.5px;
+      }
+
+      .radar .grid {
+        fill: none;
+        stroke: rgba(103, 205, 255, 0.2);
+        stroke-width: 1;
+      }
+
+      .radar .axis {
+        stroke: rgba(103, 205, 255, 0.25);
+        stroke-width: 1;
+      }
+
+      .radar .area {
+        fill: rgba(67, 217, 255, 0.26);
+        stroke: var(--accent);
+        stroke-width: 1.6;
+      }
+
+      .quests {
+        display: grid;
+        gap: 10px;
+        align-content: start;
+      }
+
+      .quest {
+        border: 1px solid rgba(103, 205, 255, 0.22);
+        border-radius: 10px;
+        padding: 10px;
+        background: rgba(17, 33, 67, 0.6);
+        line-height: 1.2;
+      }
+
+      .quest.urgent {
+        color: var(--urgent);
+      }
+      .quest.done {
+        color: var(--ok);
+      }
+
+      .quests-shell {
+        position: relative;
+        height: 100%;
+        border: 1px solid rgba(103, 205, 255, 0.2);
+        border-radius: 12px;
+        background: rgba(10, 22, 48, 0.32);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        padding: 10px 10px 8px;
+        overflow: hidden;
+        display: grid;
+        grid-template-rows: auto 1fr;
+        gap: 8px;
+      }
+
+      .quests-header {
+        font-family: "Orbitron", sans-serif;
+        font-size: 0.86rem;
+        letter-spacing: 0.55px;
+        color: var(--accent);
+        text-transform: uppercase;
+        text-shadow: 0 0 10px rgba(67, 217, 255, 0.35);
+        padding: 2px 2px 0;
+      }
+
+      .quest-list {
+        height: 100%;
+        overflow-y: auto;
+        padding: 2px 2px 78px;
+        display: grid;
+        align-content: start;
+        gap: 8px;
+      }
+
+      .quest-empty {
+        color: rgba(217, 236, 255, 0.6);
+        font-style: italic;
+        font-size: 0.8rem;
+        padding: 8px 6px;
+      }
+
+      .quest-item {
+        border: 1px solid rgba(103, 205, 255, 0.25);
+        border-radius: 14px;
+        background: linear-gradient(
+          160deg,
+          rgba(12, 29, 58, 0.9),
+          rgba(10, 24, 49, 0.92)
+        );
+        box-shadow:
+          0 0 14px rgba(67, 217, 255, 0.2),
+          inset 0 0 10px rgba(67, 217, 255, 0.08);
+        padding: 10px 12px;
+        display: grid;
+        grid-template-columns: auto 1fr auto auto;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .quest-left {
+        color: rgba(179, 206, 236, 0.5);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 0.95rem;
+      }
+
+      .quest-main {
+        min-width: 0;
+        display: grid;
+        gap: 5px;
+      }
+
+      .quest-item .name {
+        color: #e9f6ff;
+        font-weight: 700;
+        font-size: 0.92rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .quest-badge {
+        display: inline-block;
+        width: fit-content;
+        border: 1px solid rgba(255, 126, 92, 0.45);
+        border-radius: 8px;
+        padding: 2px 8px;
+        font-family: "Orbitron", sans-serif;
+        font-size: 0.64rem;
+        letter-spacing: 0.35px;
+        color: #ff7e5c;
+        background: rgba(57, 26, 18, 0.55);
+        text-transform: uppercase;
+      }
+
+      .quest-stats {
+        text-align: left;
+        min-width: 64px;
+        display: grid;
+        gap: 4px;
+        justify-items: start;
+      }
+
+      .quest-reps {
+        color: #eef8ff;
+        font-family: "Orbitron", sans-serif;
+        font-size: 0.98rem;
+        line-height: 1;
+      }
+
+      .quest-xp {
+        margin-top: 2px;
+        color: #67b7ff;
+        font-family: "Orbitron", sans-serif;
+        font-size: 0.72rem;
+        letter-spacing: 0.3px;
+      }
+
+      .quest-actions-mini {
+        display: flex;
+        gap: 7px;
+        justify-content: flex-end;
+        align-items: center;
+        position: relative;
+      }
+
+      .quest-act {
+        border: 1px solid rgba(143, 188, 255, 0.45);
+        border-radius: 9px;
+        background: rgba(12, 24, 48, 0.78);
+        color: #d7ebff;
+        font-family: "Orbitron", sans-serif;
+        font-size: 0.66rem;
+        letter-spacing: 0.35px;
+        padding: 6px 10px;
+        min-width: 74px;
+        box-shadow:
+          0 0 10px rgba(96, 179, 255, 0.2),
+          inset 0 0 8px rgba(96, 179, 255, 0.1);
+      }
+
+      .quest-act.done {
+        border-color: rgba(122, 247, 107, 0.5);
+        color: #8dff9a;
+        box-shadow:
+          0 0 12px rgba(122, 247, 107, 0.25),
+          inset 0 0 8px rgba(122, 247, 107, 0.1);
+      }
+
+      .quest-act.delete {
+        border-color: rgba(255, 110, 88, 0.5);
+        color: #ff9f89;
+        box-shadow:
+          0 0 12px rgba(255, 110, 88, 0.22),
+          inset 0 0 8px rgba(255, 110, 88, 0.1);
+        min-width: 42px;
+        padding-left: 0;
+        padding-right: 0;
+        font-size: 0.82rem;
+      }
+
+      .quest-menu {
+        position: relative;
+      }
+
+      .quest-menu-toggle {
+        width: 36px;
+        height: 30px;
+        border: 1px solid rgba(143, 188, 255, 0.4);
+        border-radius: 9px;
+        background: rgba(12, 24, 48, 0.78);
+        color: #cde4ff;
+        font-size: 1rem;
+        line-height: 1;
+        box-shadow:
+          0 0 10px rgba(96, 179, 255, 0.16),
+          inset 0 0 8px rgba(96, 179, 255, 0.08);
+      }
+
+      .quest-menu-pop {
+        position: absolute;
+        right: 0;
+        top: 34px;
+        display: none;
+        gap: 6px;
+        padding: 6px;
+        border: 1px solid rgba(143, 188, 255, 0.42);
+        border-radius: 10px;
+        background: rgba(10, 20, 40, 0.95);
+        box-shadow: 0 0 14px rgba(67, 217, 255, 0.2);
+        z-index: 3;
+      }
+
+      .quest-item.menu-open .quest-menu-pop {
+        display: flex;
+      }
+
+      .quest-menu-act {
+        width: 30px;
+        height: 30px;
+        border: 1px solid rgba(143, 188, 255, 0.45);
+        border-radius: 8px;
+        background: rgba(12, 24, 48, 0.82);
+        color: #d5e9ff;
+        font-size: 0.86rem;
+        line-height: 1;
+        display: grid;
+        place-items: center;
+      }
+
+      .quest-menu-act.delete {
+        border-color: rgba(255, 110, 88, 0.55);
+        color: #ff9f89;
+      }
+
+      .quest-item.completed {
+        opacity: 0.82;
+        border-color: rgba(122, 247, 107, 0.45);
+        box-shadow:
+          0 0 14px rgba(122, 247, 107, 0.2),
+          inset 0 0 10px rgba(122, 247, 107, 0.08);
+      }
+
+      .quest-item.completed .name {
+        text-decoration: line-through;
+        color: #b7d7c0;
+      }
+
+      .quest-item.attr-agi .quest-badge {
+        color: #7cf88d;
+        border-color: rgba(124, 248, 141, 0.42);
+        background: rgba(20, 54, 32, 0.55);
+      }
+
+      .quest-item.attr-int .quest-badge {
+        color: #bf9dff;
+        border-color: rgba(191, 157, 255, 0.42);
+        background: rgba(35, 22, 61, 0.55);
+      }
+
+      .quest-item.attr-per .quest-badge {
+        color: #8de8ff;
+        border-color: rgba(141, 232, 255, 0.42);
+        background: rgba(16, 43, 58, 0.55);
+      }
+
+      .quest-item.attr-vit .quest-badge {
+        color: #ff9d7b;
+        border-color: rgba(255, 157, 123, 0.42);
+        background: rgba(57, 28, 20, 0.55);
+      }
+
+      .add-quest-btn {
+        position: absolute;
+        right: 14px;
+        bottom: 14px;
+        width: 64px;
+        height: 64px;
+        border: 1px solid rgba(103, 205, 255, 0.45);
+        border-radius: 50%;
+        background: linear-gradient(
+          160deg,
+          rgba(16, 36, 72, 0.9),
+          rgba(10, 24, 52, 0.9)
+        );
+        color: var(--accent);
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+        font-family: "Orbitron", sans-serif;
+        font-size: 2.2rem;
+        line-height: 1;
+        display: grid;
+        place-items: center;
+        box-shadow:
+          0 0 20px rgba(67, 217, 255, 0.35),
+          inset 0 0 10px rgba(67, 217, 255, 0.12);
+      }
+
+      .quest-modal {
+        position: absolute;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 14px;
+        background: rgba(3, 8, 20, 0.52);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        z-index: 5;
+      }
+
+      .quest-modal.open {
+        display: flex;
+      }
+
+      .quest-panel {
+        width: 100%;
+        max-width: 440px;
+        border: 1px solid rgba(187, 223, 255, 0.55);
+        border-radius: 16px;
+        background: linear-gradient(
+          165deg,
+          rgba(15, 27, 56, 0.93),
+          rgba(8, 18, 38, 0.95)
+        );
+        box-shadow:
+          0 0 28px rgba(67, 217, 255, 0.18),
+          inset 0 0 14px rgba(67, 217, 255, 0.08);
+        overflow: hidden;
+      }
+
+      .quest-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 16px;
+        border-bottom: 1px solid rgba(103, 205, 255, 0.18);
+        font-family: "Orbitron", sans-serif;
+        color: #eef6ff;
+        font-size: 1.08rem;
+        letter-spacing: 0.4px;
+      }
+
+      .quest-head .icon {
+        color: var(--accent);
+        font-size: 1.2rem;
+        text-shadow: 0 0 8px rgba(67, 217, 255, 0.45);
+      }
+
+      .quest-body {
+        padding: 14px 16px 12px;
+        display: grid;
+        gap: 14px;
+      }
+
+      .q-mode {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+
+      .q-mode-btn {
+        border: 1px solid rgba(103, 205, 255, 0.35);
+        border-radius: 9px;
+        background: rgba(11, 24, 48, 0.76);
+        color: #c5dcf8;
+        font-family: "Orbitron", sans-serif;
+        font-size: 0.67rem;
+        letter-spacing: 0.35px;
+        padding: 7px 6px;
+        text-transform: uppercase;
+      }
+
+      .q-mode-btn.active {
+        color: #ebf7ff;
+        border-color: rgba(103, 205, 255, 0.7);
+        box-shadow: 0 0 10px rgba(67, 217, 255, 0.28);
+        background: rgba(20, 42, 80, 0.84);
+      }
+
+      .task-form {
+        display: none;
+        gap: 14px;
+        align-content: start;
+      }
+
+      .task-form.active {
+        display: grid;
+      }
+
+      .q-label {
+        display: block;
+        color: #dde9ff;
+        font-size: 0.78rem;
+        letter-spacing: 0.45px;
+        margin-bottom: 6px;
+      }
+
+      .q-input-wrap {
+        border: 1px solid rgba(70, 126, 255, 0.45);
+        border-radius: 12px;
+        background: rgba(9, 21, 44, 0.82);
+        display: grid;
+        grid-template-columns: 24px 1fr;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 11px;
+        box-shadow: inset 0 0 10px rgba(61, 126, 255, 0.15);
+      }
+
+      .q-input-wrap .q-icon {
+        color: #42beff;
+        font-size: 0.95rem;
+        text-align: center;
+      }
+
+      .q-input {
+        border: 0;
+        background: transparent;
+        color: #e5f1ff;
+        font:
+          600 0.82rem "Rajdhani",
+          sans-serif;
+        outline: none;
+        min-width: 0;
+      }
+
+      .q-input::placeholder {
+        color: rgba(219, 230, 248, 0.42);
+      }
+
+      .q-input.invalid {
+        box-shadow: 0 0 0 1px rgba(255, 110, 88, 0.65);
+        border-radius: 6px;
+      }
+
+      .q-count {
+        margin-top: 4px;
+        text-align: right;
+        color: rgba(219, 230, 248, 0.58);
+        font-family: "Orbitron", sans-serif;
+        font-size: 0.62rem;
+        letter-spacing: 0.35px;
+      }
+
+      .q-xp {
+        margin-top: 4px;
+        color: #7af76b;
+        font-family: "Orbitron", sans-serif;
+        font-size: 0.64rem;
+        letter-spacing: 0.35px;
+        text-shadow: 0 0 8px rgba(122, 247, 107, 0.35);
+      }
+
+      .q-select-wrap {
+        border: 1px solid rgba(255, 108, 78, 0.45);
+        border-radius: 12px;
+        background: rgba(48, 22, 14, 0.5);
+        display: grid;
+        grid-template-columns: 24px 1fr 16px;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 11px;
+        transition:
+          border-color 120ms ease,
+          box-shadow 120ms ease,
+          background 120ms ease;
+      }
+
+      .q-select-wrap .q-icon {
+        color: #ff6d4a;
+        font-size: 0.95rem;
+        text-align: center;
+        text-shadow: 0 0 7px rgba(255, 109, 74, 0.45);
+      }
+
+      .q-select {
+        border: 0;
+        background: transparent;
+        color: #ff875f;
+        font:
+          700 0.84rem "Rajdhani",
+          sans-serif;
+        outline: none;
+        appearance: none;
+        min-width: 0;
+        cursor: pointer;
+        text-shadow: 0 0 8px rgba(255, 135, 95, 0.2);
+      }
+
+      .q-select option {
+        background: #111c3b;
+        color: #e9f3ff;
+        font-weight: 700;
+      }
+
+      .q-caret {
+        color: rgba(248, 220, 210, 0.9);
+        font-size: 0.72rem;
+        text-align: center;
+        pointer-events: none;
+      }
+
+      .q-select-wrap.attr-str {
+        border-color: rgba(255, 106, 76, 0.62);
+        background: rgba(56, 20, 12, 0.56);
+        box-shadow: inset 0 0 10px rgba(255, 106, 76, 0.14);
+      }
+
+      .q-select-wrap.attr-vit {
+        border-color: rgba(255, 125, 94, 0.62);
+        background: rgba(59, 26, 15, 0.54);
+        box-shadow: inset 0 0 10px rgba(255, 125, 94, 0.14);
+      }
+
+      .q-select-wrap.attr-agi {
+        border-color: rgba(66, 190, 255, 0.62);
+        background: rgba(14, 33, 58, 0.56);
+        box-shadow: inset 0 0 10px rgba(66, 190, 255, 0.14);
+      }
+
+      .q-select-wrap.attr-int {
+        border-color: rgba(173, 122, 255, 0.62);
+        background: rgba(34, 20, 54, 0.56);
+        box-shadow: inset 0 0 10px rgba(173, 122, 255, 0.14);
+      }
+
+      .q-select-wrap.attr-per {
+        border-color: rgba(122, 247, 107, 0.62);
+        background: rgba(20, 41, 26, 0.56);
+        box-shadow: inset 0 0 10px rgba(122, 247, 107, 0.14);
+      }
+
+      .q-preview {
+        border: 1px solid rgba(255, 130, 68, 0.5);
+        border-radius: 12px;
+        background: rgba(60, 28, 14, 0.55);
+        color: rgba(255, 211, 177, 0.85);
+        font-size: 0.8rem;
+        font-style: italic;
+        line-height: 1.3;
+        padding: 11px 12px;
+      }
+
+      .q-preview .q-icon {
+        margin-right: 6px;
+        color: #ff935b;
+        font-style: normal;
+      }
+
+      .quest-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        padding: 12px 16px 14px;
+        border-top: 1px solid rgba(103, 205, 255, 0.18);
+      }
+
+      .q-btn {
+        border-radius: 10px;
+        border: 1px solid rgba(173, 207, 255, 0.5);
+        background: rgba(12, 20, 40, 0.75);
+        color: #f1f6ff;
+        font-family: "Orbitron", sans-serif;
+        font-size: 0.82rem;
+        padding: 10px 0;
+      }
+
+      .q-btn.primary {
+        border-color: rgba(115, 190, 255, 0.8);
+        background: linear-gradient(160deg, #4ea6ff, #5fc4ff);
+        color: #f7fbff;
+      }
+
+      .edit-modal {
+        position: absolute;
+        inset: 0;
+        display: none;
+        align-items: flex-start;
+        justify-content: center;
+        padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+        background: rgba(3, 8, 20, 0.56);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        z-index: 6;
+        overflow-y: auto;
+        scrollbar-width: none;
+      }
+
+      .edit-modal::-webkit-scrollbar {
+        width: 0;
+        height: 0;
+      }
+
+      .edit-modal.open {
+        display: flex;
+      }
+
+      .edit-panel {
+        width: 100%;
+        max-width: 440px;
+        max-height: calc(100dvh - 20px);
+        border: 1px solid rgba(115, 190, 255, 0.52);
+        border-radius: 18px;
+        background: linear-gradient(
+          165deg,
+          rgba(8, 16, 34, 0.95),
+          rgba(3, 10, 22, 0.96)
+        );
+        box-shadow:
+          0 0 28px rgba(67, 217, 255, 0.2),
+          inset 0 0 14px rgba(67, 217, 255, 0.08);
+        overflow: hidden;
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+      }
+
+      .edit-panel.reminder-on {
+        max-height: calc(100dvh - 10px);
+      }
+
+      .edit-head {
+        padding: 15px 16px;
+        font-family: "Orbitron", sans-serif;
+        font-size: 1.16rem;
+        color: #e9f5ff;
+        text-align: center;
+        border-bottom: 1px solid rgba(103, 205, 255, 0.18);
+      }
+
+      .edit-body {
+        padding: 14px 16px 12px;
+        display: grid;
+        gap: 12px;
+        overflow-y: auto;
+        min-height: 0;
+        scrollbar-width: none;
+      }
+
+      .edit-body::-webkit-scrollbar {
+        width: 0;
+        height: 0;
+      }
+
+      .e-label {
+        color: rgba(219, 236, 255, 0.78);
+        font-size: 0.8rem;
+        margin-bottom: 6px;
+      }
+
+      .e-input {
+        width: 100%;
+        border: 1px solid rgba(70, 126, 255, 0.45);
+        border-radius: 12px;
+        background: rgba(7, 20, 45, 0.85);
+        color: #e7f3ff;
+        font:
+          600 0.88rem "Rajdhani",
+          sans-serif;
+        padding: 11px 12px;
+        outline: none;
+      }
+
+      .e-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        color: #dbeeff;
+        font-size: 0.82rem;
+      }
+
+      .e-toggle {
+        width: 60px;
+        height: 32px;
+        border-radius: 999px;
+        border: 1px solid rgba(103, 205, 255, 0.35);
+        background: rgba(26, 47, 77, 0.8);
+        position: relative;
+        transition: background 120ms ease;
+      }
+
+      .e-toggle::after {
+        content: "";
+        position: absolute;
+        top: 3px;
+        left: 4px;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: #5eb6ff;
+        box-shadow: 0 0 8px rgba(94, 182, 255, 0.45);
+        transition: transform 120ms ease;
+      }
+
+      .e-toggle.on {
+        background: rgba(58, 120, 182, 0.8);
+      }
+
+      .e-toggle.on::after {
+        transform: translateX(27px);
+      }
+
+      .e-time {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+      }
+
+      .e-time-rich {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 8px;
+      }
+
+      .e-time-select {
+        border: 1px solid rgba(70, 126, 255, 0.45);
+        border-radius: 10px;
+        background: rgba(7, 20, 45, 0.85);
+        color: #e7f3ff;
+        font:
+          700 0.8rem "Rajdhani",
+          sans-serif;
+        padding: 9px 8px;
+        outline: none;
+        cursor: pointer;
+      }
+
+      .e-presets {
+        display: flex;
+        gap: 7px;
+        flex-wrap: wrap;
+      }
+
+      .e-preset {
+        border: 1px solid rgba(143, 188, 255, 0.45);
+        border-radius: 9px;
+        background: rgba(12, 24, 48, 0.78);
+        color: #d7ebff;
+        font-family: "Orbitron", sans-serif;
+        font-size: 0.62rem;
+        letter-spacing: 0.3px;
+        padding: 5px 8px;
+      }
+
+      .e-clear {
+        border: 1px solid rgba(173, 207, 255, 0.45);
+        border-radius: 10px;
+        background: rgba(10, 20, 40, 0.75);
+        color: #dbeeff;
+        font-family: "Orbitron", sans-serif;
+        font-size: 0.72rem;
+        padding: 0 14px;
+      }
+
+      .e-days {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+      }
+
+      .e-day {
+        border: 1px solid rgba(117, 156, 206, 0.5);
+        border-radius: 11px;
+        background: rgba(20, 41, 73, 0.65);
+        color: #c2daf7;
+        font-family: "Orbitron", sans-serif;
+        font-size: 0.66rem;
+        padding: 6px 10px;
+        min-width: 44px;
+      }
+
+      .e-day.active {
+        border-color: rgba(115, 190, 255, 0.82);
+        color: #ebf7ff;
+        box-shadow: 0 0 10px rgba(67, 217, 255, 0.28);
+      }
+
+      .e-help {
+        color: rgba(219, 236, 255, 0.62);
+        font-size: 0.72rem;
+        line-height: 1.3;
+      }
+
+      .e-reminder-block {
+        display: grid;
+        gap: 12px;
+      }
+
+      .e-reminder-block.hidden {
+        display: none;
+      }
+
+      .e-textarea {
+        width: 100%;
+        min-height: 74px;
+        border: 1px solid rgba(70, 126, 255, 0.45);
+        border-radius: 12px;
+        background: rgba(7, 20, 45, 0.85);
+        color: #e7f3ff;
+        font:
+          600 0.82rem "Rajdhani",
+          sans-serif;
+        padding: 10px 12px;
+        resize: none;
+        outline: none;
+      }
+
+      .e-count {
+        text-align: right;
+        color: rgba(219, 236, 255, 0.62);
+        font-family: "Orbitron", sans-serif;
+        font-size: 0.62rem;
+        margin-top: 4px;
+      }
+
+      .edit-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        padding: 12px 16px 14px;
+        border-top: 1px solid rgba(103, 205, 255, 0.18);
+        background: rgba(6, 14, 30, 0.96);
+        position: sticky;
+        bottom: 0;
+      }
+
+      .nav {
+        border-top: 1px solid rgba(103, 205, 255, 0.25);
+        background: rgba(7, 16, 36, 0.95);
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+        padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+        z-index: 20;
+      }
+
+      .app.edit-open .nav {
+        display: none;
+      }
+
+      .tab {
+        border: 1px solid rgba(103, 205, 255, 0.3);
+        border-radius: 10px;
+        background: rgba(12, 27, 57, 0.8);
+        color: var(--muted);
+        text-decoration: none;
+        font-family: "Orbitron", sans-serif;
+        font-size: 1.05rem;
+        letter-spacing: 0.7px;
+        text-transform: uppercase;
+        display: grid;
+        place-items: center;
+        min-height: 44px;
+      }
+
+      .nav-icon {
+        width: 22px;
+        height: 22px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        filter: drop-shadow(0 0 6px rgba(67, 217, 255, 0.25));
+      }
+
+      .tab.active .nav-icon {
+        filter: drop-shadow(0 0 8px rgba(67, 217, 255, 0.45));
+      }
+
+      .tab.active {
+        color: var(--accent);
+        border-color: var(--accent);
+        box-shadow: 0 0 12px rgba(67, 217, 255, 0.2);
+      }
+
+      .analytics-page {
+        height: 100%;
+        display: grid;
+        gap: 10px;
+        grid-template-rows: 1fr 1fr;
+      }
+
+      .analytics-card {
+        border: 1px solid rgba(103, 205, 255, 0.25);
+        border-radius: 12px;
+        background: linear-gradient(
+          160deg,
+          rgba(12, 29, 58, 0.88),
+          rgba(8, 20, 44, 0.9)
+        );
+        padding: 10px;
+        min-height: 0;
+        display: grid;
+        grid-template-rows: auto 1fr;
+        gap: 8px;
+      }
+
+      .analytics-title {
+        font-family: "Orbitron", sans-serif;
+        color: var(--accent);
+        font-size: 0.74rem;
+        letter-spacing: 0.45px;
+        text-transform: uppercase;
+      }
+
+      .weekly-bars {
+        position: relative;
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 6px;
+        align-items: end;
+        min-height: 0;
+        border-left: 2px solid rgba(103, 205, 255, 0.35);
+        border-bottom: 2px solid rgba(103, 205, 255, 0.35);
+        padding: 4px 6px 6px 8px;
+        background: linear-gradient(
+          180deg,
+          rgba(103, 205, 255, 0.04),
+          transparent 45%
+        );
+      }
+
+      .bar-wrap {
+        display: grid;
+        grid-template-rows: 1fr auto auto;
+        gap: 4px;
+        min-height: 0;
+      }
+
+      .bar-track {
+        border: 1px solid rgba(103, 205, 255, 0.16);
+        border-radius: 6px;
+        background: rgba(8, 20, 44, 0.45);
+        position: relative;
+        overflow: hidden;
+        min-height: 92px;
+      }
+
+      .bar-fill {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 0%;
+        background: linear-gradient(180deg, #69d6ff, #2f89ff);
+        box-shadow: 0 0 10px rgba(67, 217, 255, 0.35);
+        transition: height 160ms ease;
+      }
+
+      .bar-label {
+        text-align: center;
+        color: #b4d1ef;
+        font-size: 0.64rem;
+        font-family: "Orbitron", sans-serif;
+      }
+
+      .bar-value {
+        text-align: center;
+        color: rgba(183, 211, 243, 0.8);
+        font-size: 0.56rem;
+        font-family: "Orbitron", sans-serif;
+      }
+
+      .calendar-wrap {
+        display: grid;
+        grid-template-rows: auto auto 1fr;
+        gap: 6px;
+        min-height: 0;
+      }
+
+      .calendar-controls {
+        display: flex;
+        justify-content: flex-end;
+        gap: 6px;
+        align-items: center;
+      }
+
+      .calendar-select {
+        border: 1px solid rgba(103, 205, 255, 0.32);
+        border-radius: 8px;
+        background: rgba(10, 24, 48, 0.82);
+        color: #d9ecff;
+        font-family: "Orbitron", sans-serif;
+        font-size: 0.64rem;
+        padding: 5px 7px;
+        outline: none;
+      }
+
+      .calendar-weekdays {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 4px;
+      }
+
+      .calendar-weekdays span {
+        text-align: center;
+        color: rgba(191, 215, 242, 0.78);
+        font-size: 0.6rem;
+        font-family: "Orbitron", sans-serif;
+      }
+
+      .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 4px;
+        align-content: start;
+        overflow-y: auto;
+        min-height: 0;
+        scrollbar-width: none;
+      }
+
+      .calendar-grid::-webkit-scrollbar {
+        width: 0;
+        height: 0;
+      }
+
+      .calendar-day {
+        border: 1px solid rgba(255, 96, 96, 0.35);
+        border-radius: 8px;
+        background: rgba(56, 20, 20, 0.62);
+        color: #ffc1c1;
+        min-height: 24px;
+        font-size: 0.62rem;
+        display: grid;
+        place-items: center;
+        font-family: "Orbitron", sans-serif;
+      }
+
+      .calendar-day.empty {
+        border-color: transparent;
+        background: transparent;
+      }
+
+      .calendar-day.done {
+        border-color: rgba(122, 247, 107, 0.5);
+        color: #d8ffd2;
+        background: rgba(24, 64, 30, 0.75);
+        box-shadow: 0 0 8px rgba(122, 247, 107, 0.2);
+      }
+
+      .achievements-page {
+        height: 100%;
+        display: grid;
+        grid-template-rows: auto 1fr;
+        gap: 10px;
+        min-height: 0;
+      }
+
+      .auth-row {
+        border: 1px solid rgba(103, 205, 255, 0.25);
+        border-radius: 12px;
+        background: linear-gradient(
+          160deg,
+          rgba(12, 29, 58, 0.88),
+          rgba(8, 20, 44, 0.9)
+        );
+        padding: 10px;
+        display: grid;
+        gap: 8px;
+      }
+
+      .auth-actions {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+      }
+
+      .auth-btn {
+        border: 1px solid rgba(115, 190, 255, 0.55);
+        border-radius: 9px;
+        background: rgba(10, 23, 47, 0.82);
+        color: #def0ff;
+        font-family: "Orbitron", sans-serif;
+        font-size: 0.7rem;
+        padding: 9px 6px;
+        letter-spacing: 0.35px;
+      }
+
+      .auth-btn.primary {
+        background: linear-gradient(160deg, #4ea6ff, #5fc4ff);
+        color: #f7fbff;
+      }
+
+      .auth-status {
+        color: rgba(201, 223, 247, 0.82);
+        font-size: 0.72rem;
+        text-align: center;
+      }
+
+      .auth-sync {
+        color: rgba(153, 255, 199, 0.82);
+        font-size: 0.66rem;
+        text-align: center;
+        font-family: "Orbitron", sans-serif;
+        letter-spacing: 0.25px;
+      }
+
+      .auth-note {
+        color: rgba(171, 200, 232, 0.72);
+        font-size: 0.64rem;
+        text-align: center;
+        line-height: 1.25;
+      }
+
+      .achievements-list {
+        border: 1px solid rgba(103, 205, 255, 0.25);
+        border-radius: 12px;
+        background: linear-gradient(
+          160deg,
+          rgba(12, 29, 58, 0.88),
+          rgba(8, 20, 44, 0.9)
+        );
+        padding: 8px;
+        overflow-y: auto;
+        display: grid;
+        gap: 7px;
+        min-height: 0;
+        scrollbar-width: none;
+      }
+
+      .achievements-list::-webkit-scrollbar {
+        width: 0;
+        height: 0;
+      }
+
+      .achievement-item {
+        border: 1px solid rgba(103, 205, 255, 0.2);
+        border-radius: 10px;
+        padding: 8px 9px;
+        background: rgba(9, 22, 47, 0.72);
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .achievement-icon {
+        width: 22px;
+        height: 22px;
+        border-radius: 7px;
+        border: 1px solid rgba(103, 205, 255, 0.35);
+        display: grid;
+        place-items: center;
+        color: #8fcfff;
+        font-size: 0.76rem;
+        background: rgba(12, 27, 57, 0.8);
+      }
+
+      .achievement-main {
+        min-width: 0;
+      }
+
+      .achievement-name {
+        color: #dfefff;
+        font-size: 0.72rem;
+        font-family: "Orbitron", sans-serif;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .achievement-rule {
+        margin-top: 2px;
+        color: rgba(184, 208, 235, 0.82);
+        font-size: 0.62rem;
+        line-height: 1.2;
+      }
+
+      .achievement-state {
+        font-family: "Orbitron", sans-serif;
+        font-size: 0.6rem;
+        color: #ff9f9f;
+        letter-spacing: 0.35px;
+      }
+
+      .achievement-item.unlocked {
+        border-color: rgba(122, 247, 107, 0.45);
+        background: rgba(22, 56, 28, 0.72);
+        box-shadow: 0 0 10px rgba(122, 247, 107, 0.16);
+      }
+
+      .achievement-item.unlocked .achievement-icon {
+        color: #c9ffb9;
+        border-color: rgba(122, 247, 107, 0.45);
+        background: rgba(29, 72, 35, 0.82);
+      }
+
+      .achievement-item.unlocked .achievement-state {
+        color: #9effb8;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app" role="application" aria-label="Hunter mobile interface">
+      <section class="views">
+        <section class="view active" id="home" aria-label="Home view">
+          <article class="card">
+            <div class="home-layout">
+              <section class="home-top">
+                <div class="hunter-head">
+                  <label class="hunter-row row-name"
+                    ><span class="hunter-key">Name</span
+                    ><input
+                      class="hunter-input hunter-val"
+                      id="hunter-name-input"
+                      type="text"
+                      value="Sung Jinwoo"
+                  /></label>
+                  <p class="hunter-row row-job">
+                    <span class="hunter-key">Job</span
+                    ><span class="hunter-val" id="job-display"
+                      >Awakened Drifter</span
+                    >
+                  </p>
+                  <p class="hunter-row row-title">
+                    <span class="hunter-key">Title</span
+                    ><span class="hunter-val" id="title-display"
+                      >Gateborn Wanderer</span
+                    >
+                  </p>
+                  <p class="hunter-row row-rank">
+                    <span class="hunter-key">Rank</span
+                    ><span class="hunter-val" id="rank-display">E</span>
+                  </p>
+                </div>
+                <div class="mini-resources" aria-label="XP">
+                  <div class="mini-row">
+                    <span class="mini-icon" aria-hidden="true">&#10023;</span>
+                    <span class="mini-bar"
+                      ><span class="mini-fill xp" id="xp-fill"></span
+                      ><span class="mini-val" id="xp-percent">0%</span></span
+                    >
+                  </div>
+                  <p class="xp-total" id="xp-total">TOTAL XP: 0</p>
+                </div>
+                <div class="level-panel" aria-label="Level 83">
+                  <div class="level-ring" aria-hidden="true">
+                    <span class="ring-core">
+                      <span class="level-num" id="level-num">0</span>
+                      <span class="level-label">Level</span>
+                    </span>
+                  </div>
+                  <p class="level-overcap" id="level-overcap" hidden>OVER +0</p>
+                  <span class="streak"
+                    ><span class="streak-fire" aria-hidden="true"
+                      >&#128293;</span
+                    ><span class="streak-days" id="streak-days"
+                      >0 DAYS</span
+                    ></span
+                  >
+                </div>
+              </section>
+
+              <div class="home-bottom">
+                <section class="home-block">
+                  <h2 class="block-title">Stats</h2>
+                  <div class="radar-wrap">
+                    <svg
+                      class="radar"
+                      viewBox="0 0 240 240"
+                      role="img"
+                      aria-label="Hunter stats spider web chart"
+                    >
+                      <g id="radar-grid"></g>
+                      <g id="radar-axis"></g>
+                      <polygon id="radar-area" class="area" points=""></polygon>
+                      <g id="radar-labels"></g>
+                    </svg>
+                  </div>
+                </section>
+
+                <section class="home-block">
+                  <h2 class="block-title">Stat Points</h2>
+                  <div class="points" id="points-list"></div>
+                </section>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="view" id="quests" aria-label="Quests view">
+          <section class="quests-shell">
+            <h2 class="quests-header">Quests</h2>
+            <section class="quest-list" id="quest-list">
+              <p class="quest-empty" id="quest-empty">
+                No quests yet. Tap + to create your first task.
+              </p>
+            </section>
+            <button class="add-quest-btn" type="button" aria-label="Add quest">
+              +
+            </button>
+            <section class="quest-modal" id="quest-modal" aria-hidden="true">
+              <article
+                class="quest-panel"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Create New Task"
+              >
+                <header class="quest-head">
+                  <span class="icon" aria-hidden="true">&#9745;</span
+                  ><span>Create New Task</span>
+                </header>
+                <div class="quest-body">
+                  <div class="q-mode">
+                    <button
+                      class="q-mode-btn active"
+                      data-mode="single"
+                      type="button"
+                    >
+                      Single Task
+                    </button>
+                    <button
+                      class="q-mode-btn"
+                      data-mode="overall"
+                      type="button"
+                    >
+                      Overall Task
+                    </button>
+                  </div>
+
+                  <section class="task-form active" id="single-task-form">
+                    <div>
+                      <label class="q-label" for="task-title-input"
+                        >Task Title</label
+                      >
+                      <div class="q-input-wrap">
+                        <span class="q-icon" aria-hidden="true">&#9876;</span>
+                        <input
+                          class="q-input"
+                          id="task-title-input"
+                          maxlength="15"
+                          placeholder="e.g., Push-ups, Squats, ..."
+                        />
+                      </div>
+                      <p class="q-count">
+                        <span id="task-title-count">0</span>/15
+                      </p>
+                    </div>
+                    <div>
+                      <label class="q-label" for="reps-input"
+                        >Repetitions</label
+                      >
+                      <div class="q-input-wrap">
+                        <span class="q-icon" aria-hidden="true">&#8645;</span>
+                        <input
+                          class="q-input"
+                          id="reps-input"
+                          maxlength="15"
+                          placeholder="e.g., 20, 30, 10 minutes"
+                        />
+                      </div>
+                      <p class="q-count"><span id="reps-count">0</span>/15</p>
+                      <p class="q-xp" id="attribute-xp">XP Reward: 0</p>
+                    </div>
+                    <div>
+                      <label class="q-label" for="attribute-select"
+                        >Primary Attribute</label
+                      >
+                      <div class="q-select-wrap attr-str" id="attr-wrap">
+                        <span class="q-icon" id="attr-icon" aria-hidden="true"
+                          >&#9876;</span
+                        >
+                        <select class="q-select" id="attribute-select">
+                          <option value="STR">Strength</option>
+                          <option value="VIT">Vitality</option>
+                          <option value="AGI">Agility</option>
+                          <option value="INT">Intelligence</option>
+                          <option value="PER">Perception</option>
+                        </select>
+                        <span class="q-caret" aria-hidden="true">&#9662;</span>
+                      </div>
+                    </div>
+                    <p class="q-preview" id="task-preview">
+                      <span class="q-icon" aria-hidden="true">&#128065;</span
+                      >Enter task title to see preview
+                    </p>
+                  </section>
+
+                  <section class="task-form" id="overall-task-form">
+                    <div>
+                      <label class="q-label" for="overall-title-input"
+                        >Overall Task</label
+                      >
+                      <div class="q-input-wrap">
+                        <span class="q-icon" aria-hidden="true">&#9964;</span>
+                        <input
+                          class="q-input"
+                          id="overall-title-input"
+                          maxlength="15"
+                          placeholder="e.g., Full Workout Session"
+                        />
+                      </div>
+                      <p class="q-count">
+                        <span id="overall-title-count">0</span>/15
+                      </p>
+                    </div>
+                    <div>
+                      <label class="q-label" for="duration-input"
+                        >Time Planned</label
+                      >
+                      <div class="q-input-wrap">
+                        <span class="q-icon" aria-hidden="true">&#9201;</span>
+                        <input
+                          class="q-input"
+                          id="duration-input"
+                          maxlength="15"
+                          placeholder="e.g., 30 minutes"
+                        />
+                      </div>
+                      <p class="q-count">
+                        <span id="duration-count">0</span>/15
+                      </p>
+                      <p class="q-xp" id="overall-attribute-xp">XP Reward: 0</p>
+                    </div>
+                    <div>
+                      <label class="q-label" for="overall-attribute-select"
+                        >Primary Attribute</label
+                      >
+                      <div
+                        class="q-select-wrap attr-str"
+                        id="overall-attr-wrap"
+                      >
+                        <span
+                          class="q-icon"
+                          id="overall-attr-icon"
+                          aria-hidden="true"
+                          >&#9876;</span
+                        >
+                        <select class="q-select" id="overall-attribute-select">
+                          <option value="STR">Strength</option>
+                          <option value="VIT">Vitality</option>
+                          <option value="AGI">Agility</option>
+                          <option value="INT">Intelligence</option>
+                          <option value="PER">Perception</option>
+                        </select>
+                        <span class="q-caret" aria-hidden="true">&#9662;</span>
+                      </div>
+                    </div>
+                    <p class="q-preview" id="overall-preview">
+                      <span class="q-icon" aria-hidden="true">&#128065;</span
+                      >Enter overall task and time to see preview
+                    </p>
+                  </section>
+                </div>
+                <footer class="quest-actions">
+                  <button class="q-btn" id="quest-cancel" type="button">
+                    Cancel
+                  </button>
+                  <button class="q-btn primary" id="quest-create" type="button">
+                    Create
+                  </button>
+                </footer>
+              </article>
+            </section>
+            <section class="edit-modal" id="edit-modal" aria-hidden="true">
+              <article
+                class="edit-panel"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Edit Task"
+              >
+                <header class="edit-head">Edit Task</header>
+                <div class="edit-body">
+                  <div>
+                    <label class="e-label" for="edit-name-input"
+                      >Task Name</label
+                    >
+                    <input
+                      class="e-input"
+                      id="edit-name-input"
+                      maxlength="15"
+                    />
+                  </div>
+                  <div>
+                    <label class="e-label" for="edit-reps-input"
+                      >Repetitions</label
+                    >
+                    <input
+                      class="e-input"
+                      id="edit-reps-input"
+                      maxlength="15"
+                    />
+                  </div>
+                  <div class="e-row">
+                    <span>Reminder</span>
+                    <button
+                      class="e-toggle on"
+                      id="edit-reminder-toggle"
+                      type="button"
+                      aria-label="Toggle reminder"
+                    ></button>
+                  </div>
+                  <section class="e-reminder-block" id="edit-reminder-block">
+                    <div class="e-time">
+                      <div class="e-time-rich">
+                        <select class="e-time-select" id="edit-hour-select">
+                          <option>01</option>
+                          <option>02</option>
+                          <option>03</option>
+                          <option>04</option>
+                          <option>05</option>
+                          <option>06</option>
+                          <option>07</option>
+                          <option>08</option>
+                          <option>09</option>
+                          <option>10</option>
+                          <option>11</option>
+                          <option>12</option>
+                        </select>
+                        <select class="e-time-select" id="edit-minute-select">
+                          <option>00</option>
+                          <option>05</option>
+                          <option>10</option>
+                          <option>15</option>
+                          <option>20</option>
+                          <option>25</option>
+                          <option>30</option>
+                          <option>35</option>
+                          <option>40</option>
+                          <option>45</option>
+                          <option>50</option>
+                          <option>55</option>
+                        </select>
+                        <select class="e-time-select" id="edit-ampm-select">
+                          <option>AM</option>
+                          <option>PM</option>
+                        </select>
+                      </div>
+                      <button
+                        class="e-clear"
+                        id="edit-time-clear"
+                        type="button"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                    <div class="e-presets">
+                      <button
+                        class="e-preset"
+                        data-time-preset="07:00"
+                        type="button"
+                      >
+                        Morning
+                      </button>
+                      <button
+                        class="e-preset"
+                        data-time-preset="12:00"
+                        type="button"
+                      >
+                        Noon
+                      </button>
+                      <button
+                        class="e-preset"
+                        data-time-preset="18:00"
+                        type="button"
+                      >
+                        Evening
+                      </button>
+                      <button
+                        class="e-preset"
+                        data-time-preset="22:00"
+                        type="button"
+                      >
+                        Night
+                      </button>
+                    </div>
+                    <div>
+                      <p class="e-label">Repeat on</p>
+                      <div class="e-days" id="edit-days">
+                        <button class="e-day" type="button">Mon</button>
+                        <button class="e-day" type="button">Tue</button>
+                        <button class="e-day" type="button">Wed</button>
+                        <button class="e-day" type="button">Thu</button>
+                        <button class="e-day" type="button">Fri</button>
+                        <button class="e-day" type="button">Sat</button>
+                        <button class="e-day" type="button">Sun</button>
+                      </div>
+                      <p class="e-help">Leave all unchecked to repeat daily.</p>
+                    </div>
+                    <div>
+                      <textarea
+                        class="e-textarea"
+                        id="edit-message-input"
+                        maxlength="120"
+                        placeholder="Reminder message (optional)"
+                      ></textarea>
+                      <p class="e-count">
+                        <span id="edit-message-count">0</span>/120
+                      </p>
+                    </div>
+                  </section>
+                </div>
+                <footer class="edit-actions">
+                  <button class="q-btn" id="edit-cancel" type="button">
+                    Cancel
+                  </button>
+                  <button class="q-btn primary" id="edit-save" type="button">
+                    Save Changes
+                  </button>
+                </footer>
+              </article>
+            </section>
+          </section>
+        </section>
+
+        <section class="view" id="analytics" aria-label="Analytics view">
+          <article class="card analytics-page">
+            <section class="analytics-card">
+              <h2 class="analytics-title">Weekly Completion</h2>
+              <div class="weekly-bars" id="weekly-bars"></div>
+            </section>
+            <section class="analytics-card">
+              <h2 class="analytics-title">Progress Calendar</h2>
+              <div class="calendar-wrap">
+                <div class="calendar-controls">
+                  <select
+                    class="calendar-select"
+                    id="calendar-month-select"
+                  ></select>
+                  <select
+                    class="calendar-select"
+                    id="calendar-year-select"
+                  ></select>
+                </div>
+                <div class="calendar-weekdays">
+                  <span>Sun</span><span>Mon</span><span>Tue</span
+                  ><span>Wed</span><span>Thu</span><span>Fri</span
+                  ><span>Sat</span>
+                </div>
+                <div class="calendar-grid" id="calendar-grid"></div>
+              </div>
+            </section>
+          </article>
+        </section>
+
+        <section class="view" id="achievements" aria-label="Achievements view">
+          <article class="card achievements-page">
+            <section class="auth-row">
+              <div class="auth-actions">
+                <button
+                  class="auth-btn primary"
+                  id="auth-google-btn"
+                  type="button"
+                >
+                  Sign In with Google
+                </button>
+                <button class="auth-btn" id="auth-logout-btn" type="button">
+                  Logout
+                </button>
+                <button class="auth-btn" id="auth-sync-btn" type="button">
+                  Sync
+                </button>
+              </div>
+              <p class="auth-status" id="auth-status">
+                Firebase not configured. Add your config in script.
+              </p>
+              <p class="auth-sync" id="auth-sync-status">SYNC: --</p>
+            </section>
+            <section class="achievements-list" id="achievements-list"></section>
+          </article>
+        </section>
+      </section>
+
+      <nav class="nav" aria-label="Bottom navigation">
+        <a class="tab active" data-target="home" href="#home" aria-label="Home">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <ellipse cx="12" cy="12" rx="8.5" ry="4.8"></ellipse>
+            <ellipse cx="12" cy="12" rx="5.2" ry="2.8"></ellipse>
+            <path d="M4.5 12c0 4.5 3.4 8 7.5 8s7.5-3.5 7.5-8"></path>
+          </svg>
+        </a>
+        <a class="tab" data-target="quests" href="#quests" aria-label="Quests">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M7 4h9l2 3v13l-2-1-2 1-2-1-2 1-2-1-2 1V7z"></path>
+            <path d="M9 9h6M9 12h6M9 15h4"></path>
+          </svg>
+        </a>
+        <a
+          class="tab"
+          data-target="analytics"
+          href="#analytics"
+          aria-label="Analytics"
+        >
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 18h16"></path>
+            <path d="M7 16v-3M12 16V8M17 16v-6"></path>
+            <path d="M6 10l4-3 4 2 4-3"></path>
+          </svg>
+        </a>
+        <a
+          class="tab"
+          data-target="achievements"
+          href="#achievements"
+          aria-label="Achievements"
+        >
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M12 4l2.3 4.7 5.2.8-3.8 3.7.9 5.2L12 16l-4.6 2.4.9-5.2-3.8-3.7 5.2-.8z"
+            ></path>
+          </svg>
+        </a>
+      </nav>
+    </main>
+
+    <script src="./config/firebase.public.js"></script>
+    <script src="./config/firebase.local.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+    <script>
+      const appEl = document.querySelector(".app");
+      const tabs = document.querySelectorAll(".tab");
+      const views = document.querySelectorAll(".view");
+      const addQuestBtn = document.querySelector(".add-quest-btn");
+      const questModal = document.getElementById("quest-modal");
+      const questCancel = document.getElementById("quest-cancel");
+      const questCreate = document.getElementById("quest-create");
+      const taskTitleInput = document.getElementById("task-title-input");
+      const repsInput = document.getElementById("reps-input");
+      const attributeSelect = document.getElementById("attribute-select");
+      const overallTitleInput = document.getElementById("overall-title-input");
+      const durationInput = document.getElementById("duration-input");
+      const overallAttributeSelect = document.getElementById(
+        "overall-attribute-select",
+      );
+      const attrIcon = document.getElementById("attr-icon");
+      const attrWrap = document.getElementById("attr-wrap");
+      const overallAttrIcon = document.getElementById("overall-attr-icon");
+      const overallAttrWrap = document.getElementById("overall-attr-wrap");
+      const attributeXp = document.getElementById("attribute-xp");
+      const overallAttributeXp = document.getElementById(
+        "overall-attribute-xp",
+      );
+      const taskTitleCount = document.getElementById("task-title-count");
+      const repsCount = document.getElementById("reps-count");
+      const overallTitleCount = document.getElementById("overall-title-count");
+      const durationCount = document.getElementById("duration-count");
+      const taskPreview = document.getElementById("task-preview");
+      const overallPreview = document.getElementById("overall-preview");
+      const questList = document.getElementById("quest-list");
+      const questEmpty = document.getElementById("quest-empty");
+      const hunterNameInput = document.getElementById("hunter-name-input");
+      const authGoogleBtn = document.getElementById("auth-google-btn");
+      const authLogoutBtn = document.getElementById("auth-logout-btn");
+      const authSyncBtn = document.getElementById("auth-sync-btn");
+      const authStatus = document.getElementById("auth-status");
+      const authSyncStatus = document.getElementById("auth-sync-status");
+      const achievementsList = document.getElementById("achievements-list");
+      const editModal = document.getElementById("edit-modal");
+      const editPanel = document.querySelector(".edit-panel");
+      const editNameInput = document.getElementById("edit-name-input");
+      const editRepsInput = document.getElementById("edit-reps-input");
+      const editReminderToggle = document.getElementById(
+        "edit-reminder-toggle",
+      );
+      const editReminderBlock = document.getElementById("edit-reminder-block");
+      const editHourSelect = document.getElementById("edit-hour-select");
+      const editMinuteSelect = document.getElementById("edit-minute-select");
+      const editAmPmSelect = document.getElementById("edit-ampm-select");
+      const editTimePresets = document.querySelectorAll("[data-time-preset]");
+      const editTimeClear = document.getElementById("edit-time-clear");
+      const editDays = document.getElementById("edit-days");
+      const editMessageInput = document.getElementById("edit-message-input");
+      const editMessageCount = document.getElementById("edit-message-count");
+      const editCancel = document.getElementById("edit-cancel");
+      const editSave = document.getElementById("edit-save");
+      const weeklyBarsEl = document.getElementById("weekly-bars");
+      const calendarMonthSelect = document.getElementById(
+        "calendar-month-select",
+      );
+      const calendarYearSelect = document.getElementById(
+        "calendar-year-select",
+      );
+      const calendarGridEl = document.getElementById("calendar-grid");
+      const modeButtons = document.querySelectorAll(".q-mode-btn");
+      const singleTaskForm = document.getElementById("single-task-form");
+      const overallTaskForm = document.getElementById("overall-task-form");
+
+      const xpByAttribute = {
+        STR: 18,
+        VIT: 16,
+        AGI: 17,
+        INT: 19,
+        PER: 15,
+      };
+
+      const attributeVisual = {
+        STR: { icon: "&#9876;", className: "attr-str" },
+        VIT: { icon: "&#10084;", className: "attr-vit" },
+        AGI: { icon: "&#9889;", className: "attr-agi" },
+        INT: { icon: "&#10022;", className: "attr-int" },
+        PER: { icon: "&#128065;", className: "attr-per" },
+      };
+
+      const attributeLabel = {
+        STR: "STR",
+        VIT: "VIT",
+        AGI: "AGI",
+        INT: "INT",
+        PER: "PER",
+      };
+      let taskMode = "single";
+      let editingTask = null;
+      const nowForCalendar = new Date();
+      let analyticsMonth = nowForCalendar.getMonth();
+      let analyticsYear = nowForCalendar.getFullYear();
+      const dayOrder = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      const firedNotificationKeys = new Set();
+      const notificationIcon =
+        "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'%3E%3Cdefs%3E%3ClinearGradient id='bg' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23060f24'/%3E%3Cstop offset='1' stop-color='%23102f66'/%3E%3C/linearGradient%3E%3ClinearGradient id='em' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%2343d9ff'/%3E%3Cstop offset='1' stop-color='%237af76b'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='96' height='96' rx='18' fill='url(%23bg)'/%3E%3Cpath d='M48 18l22 8v20c0 14-9 24-22 32-13-8-22-18-22-32V26z' fill='none' stroke='url(%23em)' stroke-width='5'/%3E%3Cpath d='M36 34l6-7 6 7 6-7 6 7' fill='none' stroke='%23ffd86a' stroke-width='4' stroke-linecap='round'/%3E%3Ccircle cx='48' cy='50' r='9' fill='none' stroke='%2343d9ff' stroke-width='4'/%3E%3Cpath d='M48 44v12M42 50h12' stroke='%2343d9ff' stroke-width='3.5' stroke-linecap='round'/%3E%3C/svg%3E";
+      const firebaseConfig = window.FIREBASE_CONFIG || {
+        apiKey: "",
+        authDomain: "",
+        projectId: "",
+        appId: "",
+      };
+      let db = null;
+      let currentUserId = "";
+      let isHydratingFromCloud = false;
+      let saveTimer = null;
+      const defaultGoogleBtnText = "Sign In with Google";
+
+      function setActiveView(target) {
+        const safeTarget = [
+          "home",
+          "quests",
+          "analytics",
+          "achievements",
+        ].includes(target)
+          ? target
+          : "home";
+        tabs.forEach((t) =>
+          t.classList.toggle("active", t.dataset.target === safeTarget),
+        );
+        views.forEach((view) =>
+          view.classList.toggle("active", view.id === safeTarget),
+        );
+        return safeTarget;
+      }
+
+      function targetFromHash() {
+        const raw = String(window.location.hash || "")
+          .replace(/^#/, "")
+          .toLowerCase();
+        return ["home", "quests", "analytics", "achievements"].includes(raw)
+          ? raw
+          : "home";
+      }
+
+      tabs.forEach((tab) => {
+        tab.addEventListener("click", () => {
+          const target = setActiveView(tab.dataset.target);
+          if (window.location.hash !== `#${target}`) {
+            window.location.hash = target;
+          }
+        });
+      });
+
+      window.addEventListener("hashchange", () => {
+        setActiveView(targetFromHash());
+      });
+
+      function openQuestModal() {
+        questModal.classList.add("open");
+        questModal.setAttribute("aria-hidden", "false");
+        taskTitleInput.focus();
+      }
+
+      function closeQuestModal() {
+        questModal.classList.remove("open");
+        questModal.setAttribute("aria-hidden", "true");
+      }
+
+      function openEditModal(task) {
+        editingTask = task;
+        editNameInput.value = task.querySelector(".name")?.textContent || "";
+        editRepsInput.value =
+          task.querySelector(".quest-reps")?.textContent || "";
+        editReminderToggle.classList.toggle(
+          "on",
+          task.dataset.reminderOn === "true",
+        );
+        editReminderBlock.classList.toggle(
+          "hidden",
+          task.dataset.reminderOn !== "true",
+        );
+        editPanel.classList.toggle(
+          "reminder-on",
+          task.dataset.reminderOn === "true",
+        );
+        setTimeSelectorsFrom24(task.dataset.reminderTime || "09:00");
+        editMessageInput.value = task.dataset.reminderMsg || "";
+        editMessageCount.textContent = String(editMessageInput.value.length);
+        const activeDays = (task.dataset.reminderDays || "")
+          .split(",")
+          .map((d) => d.trim())
+          .filter(Boolean);
+        editDays.querySelectorAll(".e-day").forEach((dayBtn) => {
+          dayBtn.classList.toggle(
+            "active",
+            activeDays.includes(dayBtn.textContent),
+          );
+        });
+        editModal.classList.add("open");
+        editModal.setAttribute("aria-hidden", "false");
+        appEl.classList.add("edit-open");
+        editNameInput.focus();
+      }
+
+      function closeEditModal() {
+        editModal.classList.remove("open");
+        editModal.setAttribute("aria-hidden", "true");
+        appEl.classList.remove("edit-open");
+        editingTask = null;
+      }
+
+      function initFirebaseAuth() {
+        const configured = Boolean(
+          firebaseConfig.apiKey &&
+          firebaseConfig.authDomain &&
+          firebaseConfig.projectId &&
+          firebaseConfig.appId,
+        );
+        if (
+          !configured ||
+          typeof firebase === "undefined" ||
+          typeof firebase.firestore === "undefined"
+        ) {
+          authStatus.textContent =
+            "Firebase not configured. Add config values to enable auth.";
+          authGoogleBtn.disabled = true;
+          authLogoutBtn.disabled = true;
+          authSyncBtn.disabled = true;
+          return;
+        }
+        if (!firebase.apps.length) {
+          firebase.initializeApp(firebaseConfig);
+        }
+        const auth = firebase.auth();
+        db = firebase.firestore();
+        const provider = new firebase.auth.GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: "select_account" });
+        auth
+          .setPersistence(firebase.auth.Auth.Persistence.LOCAL)
+          .catch(() => {});
+        auth.onAuthStateChanged(async (user) => {
+          const isLogged = Boolean(user);
+          currentUserId = isLogged ? user.uid : "";
+          authStatus.textContent = isLogged
+            ? `Logged in: ${user.displayName || user.email}`
+            : "Not logged in";
+          authGoogleBtn.textContent = defaultGoogleBtnText;
+          authGoogleBtn.disabled = isLogged;
+          authLogoutBtn.disabled = !isLogged;
+          authSyncBtn.disabled = !isLogged;
+          authSyncStatus.textContent = isLogged
+            ? "SYNC: loading cloud data..."
+            : "SYNC: --";
+          if (isLogged) {
+            await loadUserData(user.uid);
+          }
+        });
+
+        authGoogleBtn.addEventListener("click", async () => {
+          try {
+            await auth.signInWithPopup(provider);
+          } catch (err) {
+            authStatus.textContent = `Google sign-in failed: ${err.message}`;
+          }
+        });
+
+        authLogoutBtn.addEventListener("click", async () => {
+          try {
+            await auth.signOut();
+            authStatus.textContent = "Logged out";
+          } catch (err) {
+            authStatus.textContent = `Logout failed: ${err.message}`;
+          }
+        });
+
+        authSyncBtn.addEventListener("click", async () => {
+          if (!currentUserId) {
+            authStatus.textContent = "Login first to sync.";
+            return;
+          }
+          authSyncStatus.textContent = "SYNC: syncing...";
+          await saveUserData();
+          await loadUserData(currentUserId);
+        });
+      }
+
+      function formatSyncStamp(value) {
+        const dt = value instanceof Date ? value : new Date(value);
+        if (Number.isNaN(dt.getTime())) {
+          return "--";
+        }
+        return dt.toLocaleString("en-US", {
+          year: "numeric",
+          month: "short",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      }
+
+      function clearQuestList() {
+        questList
+          .querySelectorAll(".quest-item")
+          .forEach((item) => item.remove());
+        if (questEmpty) {
+          questEmpty.style.display = "block";
+        }
+      }
+
+      function getAttrFromItem(item) {
+        const attr = (item.querySelector(".quest-badge")?.textContent || "")
+          .slice(0, 3)
+          .toUpperCase();
+        return ["STR", "VIT", "AGI", "INT", "PER"].includes(attr)
+          ? attr
+          : "STR";
+      }
+
+      function questItemToData(item) {
+        return {
+          title: item.querySelector(".name")?.textContent || "Untitled",
+          reps: item.querySelector(".quest-reps")?.textContent || "0",
+          attrKey: getAttrFromItem(item),
+          xp: Number.parseInt(item.dataset.xp || "0", 10) || 0,
+          completed: item.dataset.completed === "true",
+          completedAt: item.dataset.completedAt || "",
+          reminderOn: item.dataset.reminderOn === "true",
+          reminderTime: item.dataset.reminderTime || "09:00",
+          reminderDays: item.dataset.reminderDays || "",
+          reminderMsg: item.dataset.reminderMsg || "",
+        };
+      }
+
+      function applyQuestData(data) {
+        const item = createQuestItem({
+          title: String(data.title || "Untitled"),
+          reps: String(data.reps || "0"),
+          attrKey: String(data.attrKey || "STR"),
+          xp: Number.parseInt(String(data.xp || "0"), 10) || 0,
+        });
+        const completed = Boolean(data.completed);
+        item.dataset.completed = completed ? "true" : "false";
+        item.dataset.completedAt = completed
+          ? String(data.completedAt || "")
+          : "";
+        item.dataset.reminderOn = data.reminderOn ? "true" : "false";
+        item.dataset.reminderTime = String(data.reminderTime || "09:00");
+        item.dataset.reminderDays = String(data.reminderDays || "");
+        item.dataset.reminderMsg = String(data.reminderMsg || "");
+        if (completed) {
+          item.classList.add("completed");
+          const doneBtn = item.querySelector('[data-action="done"]');
+          if (doneBtn) {
+            doneBtn.textContent = "Undone";
+          }
+        }
+        questList.appendChild(item);
+      }
+
+      async function saveUserData() {
+        if (!db || !currentUserId || isHydratingFromCloud) {
+          return;
+        }
+        authSyncStatus.textContent = "SYNC: saving...";
+        const quests = Array.from(
+          questList.querySelectorAll(".quest-item"),
+        ).map((item) => questItemToData(item));
+        const cleanName = (hunterNameInput.value || "").trim() || "Sung Jinwoo";
+        const nowIso = new Date().toISOString();
+        const payload = {
+          name: cleanName,
+          trueLevel,
+          xpIntoLevel,
+          quests,
+          updatedAtClient: nowIso,
+          lastSyncAtISO: nowIso,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        };
+        try {
+          const ref = db
+            .collection("users")
+            .doc(currentUserId)
+            .collection("profile")
+            .doc("main");
+          await ref.set(payload);
+          const verify = await ref.get();
+          if (!verify.exists) {
+            throw new Error("write verification failed");
+          }
+          authSyncStatus.textContent = `SYNC: ${formatSyncStamp(nowIso)} (${quests.length} quests)`;
+        } catch (err) {
+          authStatus.textContent = `Cloud save failed: ${err.message}`;
+          authSyncStatus.textContent = "SYNC: save failed";
+        }
+      }
+
+      function queueSaveUserData() {
+        if (!db || !currentUserId || isHydratingFromCloud) {
+          return;
+        }
+        if (saveTimer) {
+          clearTimeout(saveTimer);
+        }
+        saveTimer = setTimeout(() => {
+          saveUserData();
+        }, 250);
+      }
+
+      async function loadUserData(uid) {
+        if (!db || !uid) {
+          return;
+        }
+        isHydratingFromCloud = true;
+        try {
+          const snap = await db
+            .collection("users")
+            .doc(uid)
+            .collection("profile")
+            .doc("main")
+            .get();
+          if (!snap.exists) {
+            isHydratingFromCloud = false;
+            await saveUserData();
+            return;
+          }
+          const data = snap.data() || {};
+          hunterNameInput.value = String(data.name || "Sung Jinwoo");
+          trueLevel = Math.max(
+            0,
+            Number.parseInt(String(data.trueLevel || "0"), 10) || 0,
+          );
+          xpIntoLevel = Math.max(
+            0,
+            Math.min(
+              99,
+              Number.parseInt(String(data.xpIntoLevel || "0"), 10) || 0,
+            ),
+          );
+          clearQuestList();
+          const quests = Array.isArray(data.quests) ? data.quests : [];
+          quests.forEach((quest) => applyQuestData(quest));
+          if (
+            questList.querySelectorAll(".quest-item").length > 0 &&
+            questEmpty
+          ) {
+            questEmpty.style.display = "none";
+          }
+          const syncStamp =
+            (data.updatedAt && typeof data.updatedAt.toDate === "function"
+              ? data.updatedAt.toDate()
+              : null) ||
+            data.updatedAtClient ||
+            new Date();
+          authSyncStatus.textContent = `SYNC: ${formatSyncStamp(syncStamp)}`;
+        } catch (err) {
+          authStatus.textContent = `Cloud load failed: ${err.message}`;
+        } finally {
+          isHydratingFromCloud = false;
+          renderLevel();
+          renderAnalytics();
+          renderAchievements();
+        }
+      }
+
+      function getProgressMetrics() {
+        const allItems = Array.from(questList.querySelectorAll(".quest-item"));
+        const completedItems = Array.from(
+          questList.querySelectorAll(".quest-item.completed"),
+        );
+        const totalTasks = allItems.length;
+        const completedTasks = completedItems.length;
+        const totalXp = trueLevel * XP_PER_LEVEL + xpIntoLevel;
+        const streak = calculateStreakFromCalendar();
+        const byAttr = { STR: 0, VIT: 0, AGI: 0, INT: 0, PER: 0 };
+        const activeDays = new Set();
+
+        completedItems.forEach((item) => {
+          const attr = (item.querySelector(".quest-badge")?.textContent || "")
+            .slice(0, 3)
+            .toUpperCase();
+          if (byAttr[attr] !== undefined) {
+            byAttr[attr] += 1;
+          }
+          const stamp = item.dataset.completedAt || "";
+          if (stamp) {
+            activeDays.add(stamp);
+          }
+        });
+
+        return {
+          totalTasks,
+          completedTasks,
+          totalXp,
+          streak,
+          byAttr,
+          activeDays: activeDays.size,
+        };
+      }
+      function buildAchievements() {
+        const arr = [];
+        const add = (name, rule, icon, unlocked) =>
+          arr.push({ id: arr.length + 1, name, rule, icon, unlocked });
+        const m = getProgressMetrics();
+
+        const levelMilestones = [
+          15, 25, 35, 45, 55, 65, 75, 85, 95, 105, 115, 125, 135, 145, 155, 165,
+          175, 185, 195, 200,
+        ];
+        levelMilestones.forEach((need, idx) => {
+          add(
+            `Ascension Trial ${idx + 1}`,
+            `Reach level ${need}`,
+            "&#11014;",
+            trueLevel >= need,
+          );
+        });
+
+        const xpMilestones = [
+          1500, 2500, 3500, 4500, 5500, 7000, 8500, 10000, 11500, 13000, 14500,
+          16000, 17500, 19000, 20000,
+        ];
+        xpMilestones.forEach((need, idx) => {
+          add(
+            `Mana Engine ${idx + 1}`,
+            `Gain ${fmt(need)} total XP`,
+            "&#10023;",
+            m.totalXp >= need,
+          );
+        });
+
+        const streakMilestones = [
+          3, 5, 7, 10, 14, 18, 22, 26, 30, 35, 40, 50, 60, 75, 90,
+        ];
+        streakMilestones.forEach((need, idx) => {
+          add(
+            `Unbroken Oath ${idx + 1}`,
+            `Hold a ${need}-day streak`,
+            "&#128293;",
+            m.streak >= need,
+          );
+        });
+
+        const completionMilestones = [5, 8, 12, 16, 20, 24, 30, 36, 42, 50];
+        completionMilestones.forEach((need, idx) => {
+          add(
+            `Raid Board ${idx + 1}`,
+            `Keep ${need} quests completed at once`,
+            "&#9876;",
+            m.completedTasks >= need,
+          );
+        });
+
+        ["STR", "VIT", "AGI", "INT", "PER"].forEach((attr) => {
+          add(
+            `${attr} Mastery I`,
+            `Complete 5 active ${attr} quests`,
+            "&#9670;",
+            m.byAttr[attr] >= 5,
+          );
+          add(
+            `${attr} Mastery II`,
+            `Complete 12 active ${attr} quests`,
+            "&#9670;",
+            m.byAttr[attr] >= 12,
+          );
+        });
+
+        const titleLevels = [
+          0, 7, 14, 21, 28, 35, 42, 49, 56, 63, 70, 77, 84, 91, 98, 105, 112,
+          119, 126, 133, 140, 147, 154, 161, 168, 175, 182, 189, 196, 200,
+        ];
+        titleLevels.forEach((need, idx) => {
+          add(
+            `Title Ascension ${idx + 1}`,
+            `Unlock title tier ${idx + 1} at level ${need}`,
+            "&#9819;",
+            trueLevel >= need,
+          );
+        });
+
+        return arr.slice(0, 100);
+      }
+      function renderAchievements() {
+        const achievements = buildAchievements().sort((a, b) => {
+          if (a.unlocked !== b.unlocked) {
+            return a.unlocked ? -1 : 1;
+          }
+          return a.id - b.id;
+        });
+        achievementsList.innerHTML = "";
+        achievements.forEach((a) => {
+          const item = document.createElement("article");
+          item.className = `achievement-item${a.unlocked ? " unlocked" : ""}`;
+          item.innerHTML = `
+          <span class="achievement-icon" aria-hidden="true">${a.icon}</span>
+          <div class="achievement-main">
+            <p class="achievement-name">#${a.id} ${a.name}</p>
+            <p class="achievement-rule">${a.rule}</p>
+          </div>
+          <p class="achievement-state">${a.unlocked ? "UNLOCKED" : "LOCKED"}</p>
+        `;
+          achievementsList.appendChild(item);
+        });
+      }
+
+      function todayIso() {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      }
+
+      function renderWeeklyBars() {
+        weeklyBarsEl.innerHTML = "";
+        const today = new Date();
+        const start = new Date(today);
+        start.setDate(today.getDate() - 6);
+        const counts = {};
+
+        questList.querySelectorAll(".quest-item.completed").forEach((item) => {
+          const key = item.dataset.completedAt || "";
+          if (key) {
+            counts[key] = (counts[key] || 0) + 1;
+          }
+        });
+
+        const maxVal = Math.max(5, ...Object.values(counts));
+        for (let i = 0; i < 7; i += 1) {
+          const day = new Date(start);
+          day.setDate(start.getDate() + i);
+          const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+          const count = counts[key] || 0;
+          const pct =
+            count === 0 ? 0 : Math.max(6, Math.round((count / maxVal) * 100));
+          const wrap = document.createElement("div");
+          wrap.className = "bar-wrap";
+          wrap.innerHTML = `
+          <div class="bar-track"><span class="bar-fill" style="height:${pct}%"></span></div>
+          <p class="bar-label">${day.toLocaleDateString("en-US", { weekday: "short" }).slice(0, 3)}</p>
+          <p class="bar-value">${count}</p>
+        `;
+          weeklyBarsEl.appendChild(wrap);
+        }
+      }
+
+      function ensureCalendarSelectors() {
+        if (calendarMonthSelect.options.length === 0) {
+          for (let m = 0; m < 12; m += 1) {
+            const d = new Date(2026, m, 1);
+            const opt = document.createElement("option");
+            opt.value = String(m);
+            opt.textContent = d.toLocaleDateString("en-US", { month: "short" });
+            calendarMonthSelect.appendChild(opt);
+          }
+        }
+
+        const years = new Set();
+        const currentYear = new Date().getFullYear();
+        years.add(currentYear - 2);
+        years.add(currentYear - 1);
+        years.add(currentYear);
+        questList.querySelectorAll(".quest-item").forEach((item) => {
+          const stamp = item.dataset.completedAt || "";
+          const m = stamp.match(/^(\d{4})-/);
+          if (m) {
+            const parsed = Number.parseInt(m[1], 10);
+            if (parsed <= currentYear) {
+              years.add(parsed);
+            }
+          }
+        });
+        const sortedYears = Array.from(years).sort((a, b) => a - b);
+        const currentSelected = calendarYearSelect.value;
+        calendarYearSelect.innerHTML = "";
+        sortedYears.forEach((year) => {
+          const opt = document.createElement("option");
+          opt.value = String(year);
+          opt.textContent = String(year);
+          calendarYearSelect.appendChild(opt);
+        });
+        if (
+          currentSelected &&
+          sortedYears.includes(Number.parseInt(currentSelected, 10))
+        ) {
+          calendarYearSelect.value = currentSelected;
+        }
+
+        if (
+          (Number.parseInt(calendarYearSelect.value, 10) || currentYear) >
+          currentYear
+        ) {
+          calendarYearSelect.value = String(currentYear);
+        }
+
+        const selectedYear =
+          Number.parseInt(calendarYearSelect.value, 10) || currentYear;
+        const currentMonth = new Date().getMonth();
+        Array.from(calendarMonthSelect.options).forEach((opt, idx) => {
+          opt.disabled = selectedYear === currentYear && idx > currentMonth;
+        });
+      }
+
+      function renderProgressCalendar() {
+        ensureCalendarSelectors();
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth();
+        if (analyticsYear > currentYear) {
+          analyticsYear = currentYear;
+        }
+        if (analyticsYear === currentYear && analyticsMonth > currentMonth) {
+          analyticsMonth = currentMonth;
+        }
+        calendarMonthSelect.value = String(analyticsMonth);
+        calendarYearSelect.value = String(analyticsYear);
+        const year = analyticsYear;
+        const month = analyticsMonth;
+        const first = new Date(year, month, 1);
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const firstWeekday = first.getDay();
+        calendarGridEl.innerHTML = "";
+        const isCurrentMonth =
+          now.getFullYear() === year && now.getMonth() === month;
+        const todayDate = now.getDate();
+
+        const completed = new Set();
+        questList.querySelectorAll(".quest-item.completed").forEach((item) => {
+          if (item.dataset.completedAt) {
+            completed.add(item.dataset.completedAt);
+          }
+        });
+
+        for (let i = 0; i < firstWeekday; i += 1) {
+          const cell = document.createElement("div");
+          cell.className = "calendar-day empty";
+          calendarGridEl.appendChild(cell);
+        }
+
+        for (let d = 1; d <= daysInMonth; d += 1) {
+          const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+          const cell = document.createElement("div");
+          const isDone = completed.has(key);
+          const isFuture = isCurrentMonth && d > todayDate;
+          cell.className = `calendar-day${isDone ? " done" : ""}`;
+          if (!isDone && isFuture) {
+            cell.style.background = "rgba(20, 30, 48, 0.55)";
+            cell.style.borderColor = "rgba(128, 151, 184, 0.25)";
+            cell.style.color = "rgba(183, 206, 235, 0.72)";
+          }
+          cell.textContent = String(d);
+          calendarGridEl.appendChild(cell);
+        }
+      }
+
+      function renderAnalytics() {
+        renderWeeklyBars();
+        renderProgressCalendar();
+      }
+
+      function setTimeSelectorsFrom24(time24) {
+        const m = String(time24 || "09:00").match(/^(\d{2}):(\d{2})$/);
+        if (!m) {
+          editHourSelect.value = "09";
+          editMinuteSelect.value = "00";
+          editAmPmSelect.value = "AM";
+          return;
+        }
+        const h24 = Number.parseInt(m[1], 10);
+        const minute = m[2];
+        const ampm = h24 >= 12 ? "PM" : "AM";
+        let h12 = h24 % 12;
+        if (h12 === 0) {
+          h12 = 12;
+        }
+        editHourSelect.value = String(h12).padStart(2, "0");
+        editMinuteSelect.value = minute;
+        editAmPmSelect.value = ampm;
+      }
+
+      function getTime24FromSelectors() {
+        let h12 = Number.parseInt(editHourSelect.value, 10);
+        const minute = editMinuteSelect.value;
+        const ampm = editAmPmSelect.value;
+        if (Number.isNaN(h12) || h12 < 1 || h12 > 12) {
+          h12 = 9;
+        }
+        let h24 = h12 % 12;
+        if (ampm === "PM") {
+          h24 += 12;
+        }
+        return `${String(h24).padStart(2, "0")}:${minute}`;
+      }
+
+      function currentTaskXp() {
+        const base = xpByAttribute[attributeSelect.value] || 0;
+        return base;
+      }
+
+      function currentOverallTaskXp() {
+        const base = xpByAttribute[overallAttributeSelect.value] || 0;
+        const minutes = Number.parseInt(durationInput.value, 10) || 0;
+        const timeFactor = Math.max(1, Math.ceil(minutes / 15));
+        return base * timeFactor;
+      }
+
+      function setAttributeStyle(selectEl, iconEl, wrapEl) {
+        const visual = attributeVisual[selectEl.value] || attributeVisual.STR;
+        iconEl.innerHTML = visual.icon;
+        wrapEl.classList.remove(
+          "attr-str",
+          "attr-vit",
+          "attr-agi",
+          "attr-int",
+          "attr-per",
+        );
+        wrapEl.classList.add(visual.className);
+      }
+
+      function setTaskMode(mode) {
+        taskMode = mode;
+        modeButtons.forEach((btn) =>
+          btn.classList.toggle("active", btn.dataset.mode === mode),
+        );
+        singleTaskForm.classList.toggle("active", mode === "single");
+        overallTaskForm.classList.toggle("active", mode === "overall");
+      }
+
+      function updateCountsAndPreview() {
+        taskTitleCount.textContent = String(taskTitleInput.value.length);
+        repsCount.textContent = String(repsInput.value.length);
+        overallTitleCount.textContent = String(overallTitleInput.value.length);
+        durationCount.textContent = String(durationInput.value.length);
+        attributeXp.textContent = `XP Reward: ${currentTaskXp()} (${attributeSelect.value})`;
+        overallAttributeXp.textContent = `XP Reward: ${currentOverallTaskXp()} (${overallAttributeSelect.value})`;
+        setAttributeStyle(attributeSelect, attrIcon, attrWrap);
+        setAttributeStyle(
+          overallAttributeSelect,
+          overallAttrIcon,
+          overallAttrWrap,
+        );
+        if (taskTitleInput.value.trim()) {
+          taskPreview.innerHTML = `<span class="q-icon" aria-hidden="true">&#128065;</span>${taskTitleInput.value.trim()} (${repsInput.value.trim() || "set reps"})`;
+        } else {
+          taskPreview.innerHTML = `<span class="q-icon" aria-hidden="true">&#128065;</span>Enter task title to see preview`;
+        }
+        if (overallTitleInput.value.trim()) {
+          overallPreview.innerHTML = `<span class="q-icon" aria-hidden="true">&#128065;</span>${overallTitleInput.value.trim()} (${durationInput.value.trim() || "0 min"})`;
+        } else {
+          overallPreview.innerHTML = `<span class="q-icon" aria-hidden="true">&#128065;</span>Enter overall task and time to see preview`;
+        }
+      }
+
+      function createQuestItem({ title, reps, attrKey, xp }) {
+        const attribute = attributeLabel[attrKey] || attrKey;
+        const item = document.createElement("article");
+        item.className = `quest-item attr-${String(attrKey).toLowerCase()}`;
+        item.dataset.xp = String(xp);
+        item.dataset.completed = "false";
+        item.dataset.completedAt = "";
+        item.dataset.reminderOn = "false";
+        item.dataset.reminderTime = "09:00";
+        item.dataset.reminderDays = "";
+        item.dataset.reminderMsg = "";
+        item.innerHTML = `
+        <div class="quest-left">
+          <span aria-hidden="true">&#8942;</span>
+        </div>
+        <div class="quest-main">
+          <p class="name">${title}</p>
+          <p class="quest-badge">${attribute} +10</p>
+        </div>
+        <div class="quest-stats">
+          <p class="quest-reps">${reps}</p>
+          <p class="quest-xp">+${xp} XP</p>
+        </div>
+        <div class="quest-actions-mini">
+          <button class="quest-act done" data-action="done" type="button">Done</button>
+          <div class="quest-menu">
+            <button class="quest-menu-toggle" data-action="menu" type="button" aria-label="Task menu">&#8942;</button>
+            <div class="quest-menu-pop">
+              <button class="quest-menu-act" data-action="edit" type="button" aria-label="Edit task">&#9998;</button>
+              <button class="quest-menu-act delete" data-action="delete" type="button" aria-label="Delete task">&#128465;</button>
+            </div>
+          </div>
+        </div>
+      `;
+        return item;
+      }
+
+      function seedDefaultTasks() {
+        if (questList.querySelector(".quest-item")) {
+          return;
+        }
+        const defaults = [
+          { title: "Push-ups", reps: "20", attrKey: "STR" },
+          { title: "Sit-ups", reps: "30", attrKey: "VIT" },
+          { title: "Squats", reps: "25", attrKey: "AGI" },
+          { title: "10 km Run", reps: "10 km", attrKey: "PER" },
+        ];
+        defaults.forEach((task) => {
+          const xp = xpByAttribute[task.attrKey] || 0;
+          questList.appendChild(createQuestItem({ ...task, xp }));
+        });
+        if (questEmpty) {
+          questEmpty.style.display = "none";
+        }
+      }
+
+      addQuestBtn.addEventListener("click", openQuestModal);
+      questCancel.addEventListener("click", closeQuestModal);
+      questCreate.addEventListener("click", () => {
+        const isSingle = taskMode === "single";
+        const title = isSingle
+          ? taskTitleInput.value.trim()
+          : overallTitleInput.value.trim();
+        const reps = isSingle
+          ? repsInput.value.trim()
+          : `${durationInput.value.trim() || "0"} min`;
+        const attrKey = isSingle
+          ? attributeSelect.value
+          : overallAttributeSelect.value;
+        const attribute = attributeLabel[attrKey] || attrKey;
+        const xp = isSingle ? currentTaskXp() : currentOverallTaskXp();
+
+        if (!title) {
+          (isSingle ? taskTitleInput : overallTitleInput).focus();
+          return;
+        }
+
+        if (isSingle && !reps) {
+          repsInput.classList.add("invalid");
+          repsInput.focus();
+          return;
+        }
+        repsInput.classList.remove("invalid");
+
+        const item = createQuestItem({ title, reps, attrKey, xp });
+        questList.appendChild(item);
+        if (questEmpty) {
+          questEmpty.style.display = "none";
+        }
+        renderAnalytics();
+        renderAchievements();
+        queueSaveUserData();
+
+        taskTitleInput.value = "";
+        repsInput.value = "";
+        overallTitleInput.value = "";
+        durationInput.value = "";
+        attributeSelect.value = "STR";
+        overallAttributeSelect.value = "STR";
+        updateCountsAndPreview();
+        closeQuestModal();
+      });
+      questList.addEventListener("click", (event) => {
+        const btn = event.target.closest("button[data-action]");
+        if (!btn) {
+          questList
+            .querySelectorAll(".quest-item.menu-open")
+            .forEach((openItem) => openItem.classList.remove("menu-open"));
+          return;
+        }
+        const item = btn.closest(".quest-item");
+        if (!item) {
+          return;
+        }
+
+        if (btn.dataset.action === "menu") {
+          questList
+            .querySelectorAll(".quest-item.menu-open")
+            .forEach((openItem) => {
+              if (openItem !== item) {
+                openItem.classList.remove("menu-open");
+              }
+            });
+          item.classList.toggle("menu-open");
+          return;
+        }
+
+        if (btn.dataset.action === "edit") {
+          openEditModal(item);
+          item.classList.remove("menu-open");
+          return;
+        }
+
+        if (btn.dataset.action === "delete") {
+          item.remove();
+          if (
+            questList.querySelectorAll(".quest-item").length === 0 &&
+            questEmpty
+          ) {
+            questEmpty.style.display = "block";
+          }
+          renderAnalytics();
+          renderAchievements();
+          queueSaveUserData();
+          return;
+        }
+
+        if (btn.dataset.action === "done") {
+          const xpReward = Number.parseInt(item.dataset.xp || "0", 10) || 0;
+          const completed = item.dataset.completed === "true";
+
+          if (!completed) {
+            item.dataset.completed = "true";
+            item.dataset.completedAt = todayIso();
+            item.classList.add("completed");
+            btn.textContent = "Undone";
+            applyXpDelta(xpReward);
+          } else {
+            item.dataset.completed = "false";
+            item.dataset.completedAt = "";
+            item.classList.remove("completed");
+            btn.textContent = "Done";
+            applyXpDelta(-xpReward);
+          }
+          renderLevel();
+          renderAnalytics();
+          renderAchievements();
+          queueSaveUserData();
+        }
+      });
+      questModal.addEventListener("click", (event) => {
+        if (event.target === questModal) {
+          closeQuestModal();
+        }
+      });
+
+      taskTitleInput.addEventListener("input", updateCountsAndPreview);
+      repsInput.addEventListener("input", () => {
+        repsInput.classList.remove("invalid");
+        updateCountsAndPreview();
+      });
+      overallTitleInput.addEventListener("input", updateCountsAndPreview);
+      durationInput.addEventListener("input", updateCountsAndPreview);
+      attributeSelect.addEventListener("change", updateCountsAndPreview);
+      overallAttributeSelect.addEventListener("change", updateCountsAndPreview);
+      modeButtons.forEach((btn) => {
+        btn.addEventListener("click", () => setTaskMode(btn.dataset.mode));
+      });
+      editReminderToggle.addEventListener("click", () => {
+        editReminderToggle.classList.toggle("on");
+        const isOn = editReminderToggle.classList.contains("on");
+        editReminderBlock.classList.toggle("hidden", !isOn);
+        editPanel.classList.toggle("reminder-on", isOn);
+        if (
+          editReminderToggle.classList.contains("on") &&
+          "Notification" in window &&
+          Notification.permission === "default"
+        ) {
+          Notification.requestPermission();
+        }
+      });
+      editTimeClear.addEventListener("click", () => {
+        setTimeSelectorsFrom24("09:00");
+      });
+      editTimePresets.forEach((preset) => {
+        preset.addEventListener("click", () => {
+          setTimeSelectorsFrom24(preset.dataset.timePreset || "09:00");
+        });
+      });
+      editDays.addEventListener("click", (event) => {
+        const day = event.target.closest(".e-day");
+        if (!day) {
+          return;
+        }
+        day.classList.toggle("active");
+      });
+      editMessageInput.addEventListener("input", () => {
+        editMessageCount.textContent = String(editMessageInput.value.length);
+      });
+      editCancel.addEventListener("click", closeEditModal);
+      editSave.addEventListener("click", () => {
+        if (!editingTask) {
+          closeEditModal();
+          return;
+        }
+        const nameEl = editingTask.querySelector(".name");
+        const repsEl = editingTask.querySelector(".quest-reps");
+        if (nameEl && editNameInput.value.trim()) {
+          nameEl.textContent = editNameInput.value.trim();
+        }
+        if (repsEl && editRepsInput.value.trim()) {
+          repsEl.textContent = editRepsInput.value.trim();
+        }
+        editingTask.dataset.reminderOn = editReminderToggle.classList.contains(
+          "on",
+        )
+          ? "true"
+          : "false";
+        editingTask.dataset.reminderTime = getTime24FromSelectors();
+        const selectedDays = Array.from(
+          editDays.querySelectorAll(".e-day.active"),
+        ).map((d) => d.textContent);
+        editingTask.dataset.reminderDays = selectedDays.join(",");
+        editingTask.dataset.reminderMsg = editMessageInput.value.trim();
+        closeEditModal();
+        queueSaveUserData();
+      });
+      editModal.addEventListener("click", (event) => {
+        if (event.target === editModal) {
+          closeEditModal();
+        }
+      });
+      calendarMonthSelect.addEventListener("change", () => {
+        const picked = Number.parseInt(calendarMonthSelect.value, 10) || 0;
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth();
+        if (analyticsYear === currentYear && picked > currentMonth) {
+          analyticsMonth = currentMonth;
+        } else {
+          analyticsMonth = picked;
+        }
+        renderProgressCalendar();
+      });
+      calendarYearSelect.addEventListener("change", () => {
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        analyticsYear =
+          Number.parseInt(calendarYearSelect.value, 10) || currentYear;
+        if (analyticsYear > currentYear) {
+          analyticsYear = currentYear;
+        }
+        if (analyticsYear === currentYear && analyticsMonth > now.getMonth()) {
+          analyticsMonth = now.getMonth();
+        }
+        renderProgressCalendar();
+      });
+      hunterNameInput.addEventListener("input", () => {
+        queueSaveUserData();
+      });
+
+      const MAX_DISPLAY_LEVEL = 200;
+      const MAX_INTERNAL_LEVEL = 999;
+      const XP_PER_LEVEL = 100;
+      let trueLevel = 0;
+      let xpIntoLevel = 0;
+
+      const rankOrder = [
+        "E",
+        "D",
+        "C",
+        "B",
+        "A",
+        "S",
+        "SS",
+        "SSS",
+        "SSS+",
+        "Monarch",
+      ];
+      const rankSteps = [
+        { max: 20, rank: "E" },
+        { max: 40, rank: "D" },
+        { max: 60, rank: "C" },
+        { max: 80, rank: "B" },
+        { max: 100, rank: "A" },
+        { max: 130, rank: "S" },
+        { max: 155, rank: "SS" },
+        { max: 180, rank: "SSS" },
+        { max: 200, rank: "SSS+" },
+      ];
+
+      const jobByRank = {
+        E: "Scrapblade Initiate",
+        D: "Irontrail Scout",
+        C: "Riftline Striker",
+        B: "Aether Fang",
+        A: "Dreadgate Captain",
+        S: "Voidbreak Warden",
+        SS: "Eclipse Marshal",
+        SSS: "Abyss Vanguard",
+        "SSS+": "Starfall Sovereign",
+        Monarch: "Shadow Monarch",
+      };
+
+      const titleMilestones = [
+        { level: 0, title: "Gateborn Flicker" },
+        { level: 7, title: "Emberfoot Initiate" },
+        { level: 14, title: "Iron Pulse Cadet" },
+        { level: 21, title: "Dusk Fang Scout" },
+        { level: 28, title: "Riftlane Skirmisher" },
+        { level: 35, title: "Abyss Stepper" },
+        { level: 42, title: "Phantom Drillmaster" },
+        { level: 49, title: "Stormbound Raider" },
+        { level: 56, title: "Cinderwall Breaker" },
+        { level: 63, title: "Moonlit Pursuer" },
+        { level: 70, title: "Gate Reaver" },
+        { level: 77, title: "Ruinpath Captain" },
+        { level: 84, title: "Blight Zone Commander" },
+        { level: 91, title: "Nightfall Harrier" },
+        { level: 98, title: "Oathbound Slasher" },
+        { level: 105, title: "Arcwarden Elite" },
+        { level: 112, title: "Voidtrail Predator" },
+        { level: 119, title: "Labyrinth Tyrant" },
+        { level: 126, title: "Crimson Eclipse Herald" },
+        { level: 133, title: "Zenith Huntmaster" },
+        { level: 140, title: "Gravewind Overlord" },
+        { level: 147, title: "Starforged Reaper" },
+        { level: 154, title: "Obsidian Warlord" },
+        { level: 161, title: "Cataclysm Vanguard" },
+        { level: 168, title: "Nether Crown Bearer" },
+        { level: 175, title: "Celestial Rift King" },
+        { level: 182, title: "Endless Dungeon Emperor" },
+        { level: 189, title: "Throne of Shadows" },
+        { level: 196, title: "Monarch's Chosen" },
+        { level: 200, title: "The Absolute Monarch" },
+      ];
+
+      const statDefs = [
+        { key: "STR", icon: "&#9874;", scale: 1.9 },
+        { key: "VIT", icon: "&#9961;", scale: 1.5 },
+        { key: "AGI", icon: "&#10148;", scale: 1.7 },
+        { key: "INT", icon: "&#10022;", scale: 1.6 },
+        { key: "PER", icon: "&#9689;", scale: 1.45 },
+      ];
+
+      const refs = {
+        rank: document.getElementById("rank-display"),
+        levelNum: document.getElementById("level-num"),
+        levelRing: document.querySelector(".level-ring"),
+        levelOvercap: document.getElementById("level-overcap"),
+        xpFill: document.getElementById("xp-fill"),
+        xpPercent: document.getElementById("xp-percent"),
+        xpTotal: document.getElementById("xp-total"),
+        streakDays: document.getElementById("streak-days"),
+        job: document.getElementById("job-display"),
+        title: document.getElementById("title-display"),
+        points: document.getElementById("points-list"),
+        radarGrid: document.getElementById("radar-grid"),
+        radarAxis: document.getElementById("radar-axis"),
+        radarLabels: document.getElementById("radar-labels"),
+        radarArea: document.getElementById("radar-area"),
+      };
+
+      const pointRows = {};
+
+      function rankFromLevel(level) {
+        if (level > MAX_DISPLAY_LEVEL) {
+          return "Monarch";
+        }
+        for (const step of rankSteps) {
+          if (level <= step.max) {
+            return step.rank;
+          }
+        }
+        return "Monarch";
+      }
+
+      function titleFromLevel(level) {
+        let active = titleMilestones[0].title;
+        for (const step of titleMilestones) {
+          if (level >= step.level) {
+            active = step.title;
+          } else {
+            break;
+          }
+        }
+        return active;
+      }
+
+      function fmt(n) {
+        return n.toLocaleString("en-US");
+      }
+
+      function applyXpDelta(delta) {
+        const maxTotal = MAX_INTERNAL_LEVEL * XP_PER_LEVEL + (XP_PER_LEVEL - 1);
+        let total = trueLevel * XP_PER_LEVEL + xpIntoLevel + delta;
+        total = Math.max(0, Math.min(maxTotal, total));
+        trueLevel = Math.floor(total / XP_PER_LEVEL);
+        xpIntoLevel = total % XP_PER_LEVEL;
+      }
+
+      function calculateStreakFromCalendar() {
+        const completedDates = new Set();
+        questList.querySelectorAll(".quest-item.completed").forEach((item) => {
+          const key = item.dataset.completedAt || "";
+          if (key) {
+            completedDates.add(key);
+          }
+        });
+
+        let streak = 0;
+        const cursor = new Date();
+        cursor.setHours(0, 0, 0, 0);
+
+        while (true) {
+          const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(cursor.getDate()).padStart(2, "0")}`;
+          if (!completedDates.has(key)) {
+            break;
+          }
+          streak += 1;
+          cursor.setDate(cursor.getDate() - 1);
+        }
+        return streak;
+      }
+
+      function shouldNotifyTask(task, now) {
+        if (task.dataset.reminderOn !== "true") {
+          return false;
+        }
+        const time = task.dataset.reminderTime || "";
+        const match = time.match(/^(\d{2}):(\d{2})$/);
+        if (!match) {
+          return false;
+        }
+        const hour = Number.parseInt(match[1], 10);
+        const minute = Number.parseInt(match[2], 10);
+        if (now.getHours() !== hour || now.getMinutes() !== minute) {
+          return false;
+        }
+        const configured = (task.dataset.reminderDays || "")
+          .split(",")
+          .map((d) => d.trim())
+          .filter(Boolean);
+        const today = dayOrder[now.getDay()];
+        return configured.length === 0 || configured.includes(today);
+      }
+
+      function maybeFireNotifications() {
+        const now = new Date();
+        const minuteKey = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}-${now.getHours()}-${now.getMinutes()}`;
+        questList.querySelectorAll(".quest-item").forEach((task, idx) => {
+          if (!shouldNotifyTask(task, now)) {
+            return;
+          }
+          const key = `${minuteKey}-${idx}-${task.querySelector(".name")?.textContent || "task"}`;
+          if (firedNotificationKeys.has(key)) {
+            return;
+          }
+          firedNotificationKeys.add(key);
+          const title =
+            task.querySelector(".name")?.textContent || "Task Reminder";
+          const reps = task.querySelector(".quest-reps")?.textContent || "";
+          const xp = task.querySelector(".quest-xp")?.textContent || "";
+          const body = task.dataset.reminderMsg || `Now: ${reps}  ${xp}`.trim();
+          if (
+            "Notification" in window &&
+            Notification.permission === "granted"
+          ) {
+            const notification = new Notification(`Hunter Quest: ${title}`, {
+              body,
+              icon: notificationIcon,
+              badge: notificationIcon,
+              tag: `quest-${idx}-${title}`,
+              renotify: true,
+              vibrate: [120, 50, 120],
+              timestamp: Date.now(),
+              requireInteraction: false,
+            });
+            notification.onclick = () => {
+              try {
+                window.focus();
+                const questTab = document.querySelector(
+                  '.tab[data-target="quests"]',
+                );
+                if (questTab) {
+                  questTab.click();
+                }
+                notification.close();
+              } catch (_) {}
+            };
+          } else {
+            console.log(`Reminder: ${title} - ${body}`);
+          }
+        });
+        if (firedNotificationKeys.size > 600) {
+          firedNotificationKeys.clear();
+        }
+      }
+
+      function setupPointRows() {
+        statDefs.forEach((def) => {
+          const row = document.createElement("p");
+          row.className = "point";
+          row.innerHTML = `
+          <span class="sigil" aria-hidden="true">${def.icon}</span>
+          <span class="point-name">${def.key}</span>
+          <span class="point-val"><span data-val>0</span></span>
+        `;
+          refs.points.appendChild(row);
+          pointRows[def.key] = {
+            value: row.querySelector("[data-val]"),
+          };
+        });
+      }
+
+      function radarPoint(i, count, r, cx, cy) {
+        const angle = -Math.PI / 2 + (i * 2 * Math.PI) / count;
+        return {
+          x: cx + r * Math.cos(angle),
+          y: cy + r * Math.sin(angle),
+        };
+      }
+
+      function setupRadarSkeleton() {
+        if (!refs.radarGrid || !refs.radarAxis || !refs.radarLabels) {
+          return;
+        }
+        const cx = 120;
+        const cy = 120;
+        const radius = 84;
+        const levels = 5;
+
+        for (let level = 1; level <= levels; level += 1) {
+          const r = (radius * level) / levels;
+          const points = statDefs
+            .map((_, i) => {
+              const p = radarPoint(i, statDefs.length, r, cx, cy);
+              return `${p.x.toFixed(1)},${p.y.toFixed(1)}`;
+            })
+            .join(" ");
+          const poly = document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "polygon",
+          );
+          poly.setAttribute("class", "grid");
+          poly.setAttribute("points", points);
+          refs.radarGrid.appendChild(poly);
+        }
+
+        statDefs.forEach((def, i) => {
+          const end = radarPoint(i, statDefs.length, radius, cx, cy);
+          const line = document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "line",
+          );
+          line.setAttribute("class", "axis");
+          line.setAttribute("x1", String(cx));
+          line.setAttribute("y1", String(cy));
+          line.setAttribute("x2", end.x.toFixed(1));
+          line.setAttribute("y2", end.y.toFixed(1));
+          refs.radarAxis.appendChild(line);
+
+          const lp = radarPoint(i, statDefs.length, radius + 16, cx, cy);
+          const text = document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "text",
+          );
+          text.setAttribute("x", lp.x.toFixed(1));
+          text.setAttribute("y", lp.y.toFixed(1));
+          text.setAttribute("text-anchor", "middle");
+          text.setAttribute("dominant-baseline", "middle");
+          text.textContent = def.key;
+          refs.radarLabels.appendChild(text);
+        });
+      }
+
+      function updateRadar(statTotals) {
+        if (!refs.radarArea) {
+          return;
+        }
+        const cx = 120;
+        const cy = 120;
+        const radius = 84;
+        const cap = Math.max(250, Math.max(...statTotals) * 1.1);
+
+        const areaPoints = statTotals
+          .map((value, i) => {
+            const ratio = Math.max(0, Math.min(1, value / cap));
+            const p = radarPoint(i, statTotals.length, radius * ratio, cx, cy);
+            return `${p.x.toFixed(1)},${p.y.toFixed(1)}`;
+          })
+          .join(" ");
+        refs.radarArea.setAttribute("points", areaPoints);
+      }
+
+      function updateStatsAndBars() {
+        const rank = rankFromLevel(trueLevel);
+        const rankBoost = rankOrder.indexOf(rank);
+        const xpPercent = Math.max(
+          0,
+          Math.min(100, Math.round((xpIntoLevel / XP_PER_LEVEL) * 100)),
+        );
+        const xpProgress = xpIntoLevel / XP_PER_LEVEL;
+        const totalXp = trueLevel * XP_PER_LEVEL + xpIntoLevel;
+        const streakDays = calculateStreakFromCalendar();
+
+        refs.xpFill.style.width = `${xpPercent}%`;
+        refs.xpPercent.textContent = `${xpPercent}%`;
+        refs.xpTotal.textContent = `TOTAL XP: ${fmt(totalXp)}`;
+        refs.streakDays.textContent = `${fmt(streakDays)} DAYS`;
+
+        const totals = statDefs.map((def) => {
+          const base = Math.floor(trueLevel * def.scale);
+          const inLevelGain = Math.floor(def.scale * 6 * xpProgress);
+          const adjusted = Math.floor(
+            (base + inLevelGain) * (1 + rankBoost * 0.015),
+          );
+          pointRows[def.key].value.textContent = fmt(adjusted);
+          return adjusted;
+        });
+        updateRadar(totals);
+      }
+
+      function renderLevel() {
+        const displayLevel = Math.min(MAX_DISPLAY_LEVEL, trueLevel);
+        const rank = rankFromLevel(trueLevel);
+        const progress = Math.round((displayLevel / MAX_DISPLAY_LEVEL) * 100);
+
+        refs.levelNum.textContent = String(displayLevel);
+        refs.rank.textContent = rank;
+        refs.job.textContent = jobByRank[rank];
+        refs.title.textContent = titleFromLevel(trueLevel);
+        refs.levelRing.style.setProperty("--level-progress", `${progress}%`);
+
+        if (trueLevel > MAX_DISPLAY_LEVEL) {
+          refs.levelOvercap.hidden = false;
+          refs.levelOvercap.textContent = `OVER +${trueLevel - MAX_DISPLAY_LEVEL}`;
+        } else {
+          refs.levelOvercap.hidden = true;
+        }
+        updateStatsAndBars();
+        renderAchievements();
+        queueSaveUserData();
+      }
+
+      setupPointRows();
+      setupRadarSkeleton();
+      setActiveView(targetFromHash());
+      renderLevel();
+      updateCountsAndPreview();
+      seedDefaultTasks();
+      initFirebaseAuth();
+      renderAnalytics();
+      renderAchievements();
+      queueSaveUserData();
+      maybeFireNotifications();
+      setInterval(maybeFireNotifications, 30000);
+    </script>
+  </body>
+</html>
