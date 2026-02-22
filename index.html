@@ -6,6 +6,13 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
+    <meta name="theme-color" content="#060b1d" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Hunter HUD" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./assets/icons/icon-192.png" type="image/png" />
+    <link rel="apple-touch-icon" href="./assets/icons/icon-192.png" />
     <title>Hunter Mobile HUD</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -100,6 +107,36 @@
         height: 100%;
       }
 
+      #home {
+        overflow-y: auto;
+        scrollbar-width: none;
+      }
+
+      #home::-webkit-scrollbar {
+        width: 0;
+        height: 0;
+      }
+
+      #home > .card {
+        height: auto;
+        min-height: 100%;
+      }
+
+      #quests {
+        overflow-y: auto;
+        scrollbar-width: none;
+      }
+
+      #quests::-webkit-scrollbar {
+        width: 0;
+        height: 0;
+      }
+
+      #quests > .quests-shell {
+        height: auto;
+        min-height: 100%;
+      }
+
       .title {
         font-family: "Orbitron", sans-serif;
         font-size: 1rem;
@@ -126,11 +163,21 @@
 
       .home-layout {
         display: grid;
-        grid-template-rows: 0.78fr 1fr;
+        grid-template-rows: auto 0.72fr 1fr 0.34fr;
         gap: 10px;
         min-height: 0;
         position: relative;
         z-index: 1;
+      }
+
+      .home-heading {
+        font-family: "Orbitron", sans-serif;
+        font-size: 0.84rem;
+        letter-spacing: 0.7px;
+        text-transform: uppercase;
+        color: var(--accent);
+        text-shadow: 0 0 10px rgba(67, 217, 255, 0.45);
+        padding-left: 2px;
       }
 
       .home-top {
@@ -515,6 +562,46 @@
         min-height: 0;
       }
 
+      .logs-block {
+        border: 1px solid rgba(103, 205, 255, 0.22);
+        border-radius: 10px;
+        background: linear-gradient(
+          160deg,
+          rgba(16, 36, 72, 0.64),
+          rgba(10, 24, 52, 0.7)
+        );
+        box-shadow: inset 0 0 14px rgba(67, 217, 255, 0.08);
+        padding: 8px 10px;
+        display: grid;
+        grid-template-rows: auto 1fr;
+        gap: 6px;
+        min-height: 0;
+      }
+
+      .logs-list {
+        min-height: 0;
+        overflow-y: auto;
+        display: grid;
+        align-content: start;
+        gap: 4px;
+        padding-right: 2px;
+        scrollbar-width: none;
+      }
+
+      .logs-list::-webkit-scrollbar {
+        width: 0;
+        height: 0;
+      }
+
+      .log-item {
+        font-size: 0.66rem;
+        letter-spacing: 0.2px;
+        color: rgba(205, 229, 255, 0.86);
+        border-left: 2px solid rgba(67, 217, 255, 0.35);
+        padding-left: 6px;
+        line-height: 1.2;
+      }
+
       .block-title {
         font-family: "Orbitron", sans-serif;
         font-size: 0.78rem;
@@ -815,6 +902,15 @@
         z-index: 1;
       }
 
+      .quests-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        position: relative;
+        z-index: 1;
+      }
+
       .quest-list {
         height: 100%;
         overflow-y: auto;
@@ -1046,13 +1142,13 @@
       }
 
       .add-quest-btn {
-        position: absolute;
-        right: 14px;
-        bottom: 14px;
-        width: 64px;
-        height: 64px;
+        position: relative;
+        right: auto;
+        bottom: auto;
+        min-width: 124px;
+        height: 44px;
         border: 1px solid rgba(103, 205, 255, 0.45);
-        border-radius: 50%;
+        border-radius: 10px;
         background: linear-gradient(
           160deg,
           rgba(16, 36, 72, 0.9),
@@ -1062,14 +1158,21 @@
         backdrop-filter: blur(6px);
         -webkit-backdrop-filter: blur(6px);
         font-family: "Orbitron", sans-serif;
-        font-size: 2.2rem;
+        font-size: 0.68rem;
+        letter-spacing: 0.65px;
+        text-transform: uppercase;
         line-height: 1;
         display: grid;
         place-items: center;
         box-shadow:
           0 0 20px rgba(67, 217, 255, 0.35),
           inset 0 0 10px rgba(67, 217, 255, 0.12);
+        text-shadow: 0 0 8px rgba(67, 217, 255, 0.35);
         z-index: 1;
+      }
+
+      #quests.view.active {
+        transform: none;
       }
 
       .quest-modal {
@@ -2003,6 +2106,7 @@
       <section class="view active" id="home" aria-label="Home view">
         <article class="card home-card">
           <div class="home-layout">
+            <h2 class="home-heading">Hunter Profile</h2>
             <section class="home-top">
               <div class="hunter-head">
                   <label class="hunter-row row-name"
@@ -2080,14 +2184,30 @@
                   <h2 class="block-title">Stat Points</h2>
                   <div class="points" id="points-list"></div>
                 </section>
-            </div>
+              </div>
+
+              <section class="logs-block" aria-label="System logs">
+                <h2 class="block-title">System Logs</h2>
+                <div class="logs-list" id="system-logs">
+                  <p class="log-item">[SYSTEM] Hunter link stable.</p>
+                  <p class="log-item">[SYNC] Profile loaded successfully.</p>
+                  <p class="log-item">[QUEST] Daily protocol initialized.</p>
+                  <p class="log-item">[LEVEL] Growth metrics active.</p>
+                  <p class="log-item">[NOTICE] Keep streak to unlock bonuses.</p>
+                </div>
+              </section>
           </div>
         </article>
       </section>
 
         <section class="view" id="quests" aria-label="Quests view">
           <section class="quests-shell">
-            <h2 class="quests-header">Quests</h2>
+            <div class="quests-top">
+              <h2 class="quests-header">Quests</h2>
+              <button class="add-quest-btn" type="button" aria-label="Add quest">
+                + Create Task
+              </button>
+            </div>
             <div class="shadow-summon quest-bg" id="shadow-summon" aria-hidden="true">
               <div class="aura"></div>
               <div class="shadow-figure"></div>
@@ -2097,9 +2217,6 @@
                 No quests yet. Tap + to create your first task.
               </p>
             </section>
-            <button class="add-quest-btn" type="button" aria-label="Add quest">
-              +
-            </button>
             <section class="quest-modal" id="quest-modal" aria-hidden="true">
               <article
                 class="quest-panel"
@@ -2775,6 +2892,9 @@
           authStatus.textContent = isLogged
             ? `Logged in: ${user.displayName || user.email}`
             : "Not logged in";
+          if (isLogged && user.displayName) {
+            hunterNameInput.value = user.displayName;
+          }
           authGoogleBtn.textContent = defaultGoogleBtnText;
           authGoogleBtn.style.display = isLogged ? "none" : "";
           authGoogleBtn.disabled = isLogged;
@@ -2900,7 +3020,12 @@
         const quests = Array.from(
           questList.querySelectorAll(".quest-item"),
         ).map((item) => questItemToData(item));
-        const cleanName = (hunterNameInput.value || "").trim() || "Sung Jinwoo";
+        const authName =
+          firebase.auth().currentUser?.displayName ||
+          firebase.auth().currentUser?.email ||
+          "";
+        const cleanName =
+          (hunterNameInput.value || "").trim() || authName || "Sung Jinwoo";
         const nowIso = new Date().toISOString();
         const payload = {
           name: cleanName,
@@ -2958,8 +3083,12 @@
             await saveUserData();
             return;
           }
-          const data = snap.data() || {};
-          hunterNameInput.value = String(data.name || "Sung Jinwoo");
+        const data = snap.data() || {};
+        const authName =
+          firebase.auth().currentUser?.displayName ||
+          firebase.auth().currentUser?.email ||
+          "";
+        hunterNameInput.value = String(data.name || authName || "Sung Jinwoo");
           trueLevel = Math.max(
             0,
             Number.parseInt(String(data.trueLevel || "0"), 10) || 0,
@@ -4119,6 +4248,12 @@
     initShadowSummon();
     initLevelParticles();
     setInterval(maybeFireNotifications, 30000);
+
+    if ("serviceWorker" in navigator && (window.location.protocol === "https:" || window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./sw.js").catch(() => {});
+      });
+    }
   </script>
 </body>
 </html>
