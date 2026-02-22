@@ -1,3 +1,7 @@
 config/firebase.local.js
+config/firebase.runtime.js
 .firebase/
 firebase-debug.log
+.env
+.env.*
+!.env.example
