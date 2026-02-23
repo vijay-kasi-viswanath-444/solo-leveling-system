@@ -4,6 +4,7 @@ window.FIREBASE_CONFIG = {
   projectId: "",
   storageBucket: "",
   messagingSenderId: "",
+  messagingVapidKey: "",
   appId: "",
   measurementId: ""
 };

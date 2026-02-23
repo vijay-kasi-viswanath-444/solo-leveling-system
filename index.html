@@ -2683,6 +2683,14 @@
                 >
                   Sync
                 </button>
+                <button
+                  class="auth-btn"
+                  id="auth-push-btn"
+                  type="button"
+                  style="display: none"
+                >
+                  Enable Alerts
+                </button>
               </div>
               <p class="auth-status" id="auth-status">
                 Firebase not configured. Add your config in script.
@@ -2740,6 +2748,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-messaging-compat.js"></script>
     <script>
       const appEl = document.querySelector(".app");
       const tabs = document.querySelectorAll(".tab");
@@ -2779,6 +2788,7 @@
       const authGoogleBtn = document.getElementById("auth-google-btn");
       const authLogoutBtn = document.getElementById("auth-logout-btn");
       const authSyncBtn = document.getElementById("auth-sync-btn");
+      const authPushBtn = document.getElementById("auth-push-btn");
       const authStatus = document.getElementById("auth-status");
       const authSyncStatus = document.getElementById("auth-sync-status");
       const achievementsList = document.getElementById("achievements-list");
@@ -2852,9 +2862,12 @@
         apiKey: "",
         authDomain: "",
         projectId: "",
+        messagingSenderId: "",
+        messagingVapidKey: "",
         appId: "",
       };
       let db = null;
+      let messaging = null;
       let currentUserId = "";
       let isHydratingFromCloud = false;
       let saveTimer = null;
@@ -2954,11 +2967,85 @@
         editingTask = null;
       }
 
+      async function getOrRegisterSw() {
+        if (
+          !("serviceWorker" in navigator) ||
+          !(window.location.protocol === "https:" ||
+            window.location.hostname === "localhost" ||
+            window.location.hostname === "127.0.0.1")
+        ) {
+          return null;
+        }
+        const existing = await navigator.serviceWorker.getRegistration();
+        if (existing) {
+          return existing;
+        }
+        const swVersion = "2026-02-22-3";
+        return navigator.serviceWorker.register(`./sw.js?v=${swVersion}`);
+      }
+
+      async function ensurePushToken() {
+        if (!currentUserId || !db || !messaging) {
+          authStatus.textContent = "Login and Firebase messaging required.";
+          return;
+        }
+        if (!("Notification" in window)) {
+          authStatus.textContent = "Notifications are not supported on this browser.";
+          return;
+        }
+        if (!window.isSecureContext) {
+          authStatus.textContent = "Push requires HTTPS.";
+          return;
+        }
+
+        let permission = Notification.permission;
+        if (permission !== "granted") {
+          permission = await Notification.requestPermission();
+        }
+        if (permission !== "granted") {
+          authStatus.textContent = "Notification permission denied.";
+          return;
+        }
+
+        const swReg = await getOrRegisterSw();
+        if (!swReg) {
+          authStatus.textContent = "Service worker unavailable for push.";
+          return;
+        }
+
+        const options = { serviceWorkerRegistration: swReg };
+        if (firebaseConfig.messagingVapidKey) {
+          options.vapidKey = firebaseConfig.messagingVapidKey;
+        }
+        const token = await messaging.getToken(options);
+        if (!token) {
+          authStatus.textContent = "Push token was not generated.";
+          return;
+        }
+
+        await db
+          .collection("users")
+          .doc(currentUserId)
+          .collection("deviceTokens")
+          .doc(token)
+          .set({
+            token,
+            createdAtClient: new Date().toISOString(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            userAgent: navigator.userAgent,
+            platform: "web",
+          }, { merge: true });
+
+        authStatus.textContent = "Push alerts enabled on this device.";
+        authPushBtn.textContent = "Alerts Enabled";
+      }
+
       function initFirebaseAuth() {
         const configured = Boolean(
           firebaseConfig.apiKey &&
           firebaseConfig.authDomain &&
           firebaseConfig.projectId &&
+          firebaseConfig.messagingSenderId &&
           firebaseConfig.appId,
         );
         if (
@@ -2974,6 +3061,8 @@
           authLogoutBtn.disabled = true;
           authSyncBtn.style.display = "none";
           authSyncBtn.disabled = true;
+          authPushBtn.style.display = "none";
+          authPushBtn.disabled = true;
           return;
         }
         if (!firebase.apps.length) {
@@ -2981,6 +3070,28 @@
         }
         const auth = firebase.auth();
         db = firebase.firestore();
+        if (
+          typeof firebase.messaging !== "undefined" &&
+          typeof firebase.messaging.isSupported === "function" &&
+          firebase.messaging.isSupported()
+        ) {
+          try {
+            messaging = firebase.messaging();
+            messaging.onMessage((payload) => {
+              const title =
+                payload?.notification?.title ||
+                payload?.data?.title ||
+                "System Alert";
+              const body =
+                payload?.notification?.body ||
+                payload?.data?.body ||
+                "You have a new update.";
+              notifyImportant(title, body, `push-fg-${Date.now()}`);
+            });
+          } catch (_) {
+            messaging = null;
+          }
+        }
         const provider = new firebase.auth.GoogleAuthProvider();
         provider.setCustomParameters({ prompt: "select_account" });
         auth
@@ -2999,6 +3110,9 @@
           authLogoutBtn.disabled = !isLogged;
           authSyncBtn.style.display = isLogged ? "" : "none";
           authSyncBtn.disabled = !isLogged;
+          authPushBtn.style.display = isLogged ? "" : "none";
+          authPushBtn.disabled = !isLogged || !messaging;
+          authPushBtn.textContent = "Enable Alerts";
           authSyncStatus.textContent = isLogged
             ? "SYNC: loading cloud data..."
             : "SYNC: --";
@@ -3032,6 +3146,14 @@
           authSyncStatus.textContent = "SYNC: syncing...";
           await saveUserData();
           await loadUserData(currentUserId);
+        });
+
+        authPushBtn.addEventListener("click", async () => {
+          try {
+            await ensurePushToken();
+          } catch (err) {
+            authStatus.textContent = `Enable alerts failed: ${err.message}`;
+          }
         });
       }
 
@@ -4834,7 +4956,7 @@
           window.location.reload();
         });
 
-        const swVersion = "2026-02-22-2";
+        const swVersion = "2026-02-22-3";
         navigator.serviceWorker
           .register(`./sw.js?v=${swVersion}`)
           .then((registration) => {

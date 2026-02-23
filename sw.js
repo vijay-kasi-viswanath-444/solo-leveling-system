@@ -31,6 +31,63 @@ self.addEventListener("message", (event) => {
   }
 });
 
+self.addEventListener("push", (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch (_) {
+    payload = { body: event.data ? event.data.text() : "New system alert." };
+  }
+
+  const title =
+    payload?.notification?.title ||
+    payload?.title ||
+    payload?.data?.title ||
+    "Solo Leveling System";
+  const body =
+    payload?.notification?.body ||
+    payload?.body ||
+    payload?.data?.body ||
+    "You have a new update.";
+  const icon =
+    payload?.notification?.icon ||
+    payload?.icon ||
+    "./assets/icons/icon-192.png";
+  const badge = payload?.badge || "./assets/icons/icon-192.png";
+  const url = payload?.data?.url || "/index.html#quests";
+
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      icon,
+      badge,
+      data: { url },
+      vibrate: [120, 50, 120],
+      renotify: true,
+      tag: `sls-push-${Date.now()}`,
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const targetUrl = event.notification?.data?.url || "/index.html#quests";
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+      for (const client of list) {
+        if ("focus" in client) {
+          client.navigate(targetUrl);
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(targetUrl);
+      }
+      return undefined;
+    }),
+  );
+});
+
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") {
     return;
