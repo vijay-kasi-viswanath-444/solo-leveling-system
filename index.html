@@ -1213,6 +1213,7 @@
         position: relative;
         right: auto;
         bottom: auto;
+        margin-top: 10px;
         min-width: 124px;
         height: 44px;
         border: 1px solid rgba(103, 205, 255, 0.45);
@@ -1956,6 +1957,7 @@
       }
 
       .calendar-weekdays span {
+        margin-top: 10px;
         text-align: center;
         color: rgba(191, 215, 242, 0.78);
         font-size: 0.6rem;
@@ -2277,7 +2279,7 @@
               </button>
             </div>
             <p class="penalty-note" id="penalty-note">
-              Penalty starts only after missed tasks. Keep daily completion to avoid XP cuts.
+              Penalty starts after 2 consecutive missed days.
             </p>
             <div class="shadow-summon quest-bg" id="shadow-summon" aria-hidden="true">
               <div class="aura"></div>
@@ -2819,6 +2821,8 @@
       let analyticsYear = nowForCalendar.getFullYear();
       const dayOrder = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
       const firedNotificationKeys = new Set();
+      const importantNotificationKeys = new Set();
+      const streakMilestones = [3, 7, 14, 30, 60, 100];
       const notificationIcon =
         "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'%3E%3Cdefs%3E%3ClinearGradient id='bg' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23060f24'/%3E%3Cstop offset='1' stop-color='%23102f66'/%3E%3C/linearGradient%3E%3ClinearGradient id='em' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%2343d9ff'/%3E%3Cstop offset='1' stop-color='%237af76b'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='96' height='96' rx='18' fill='url(%23bg)'/%3E%3Cpath d='M48 18l22 8v20c0 14-9 24-22 32-13-8-22-18-22-32V26z' fill='none' stroke='url(%23em)' stroke-width='5'/%3E%3Cpath d='M36 34l6-7 6 7 6-7 6 7' fill='none' stroke='%23ffd86a' stroke-width='4' stroke-linecap='round'/%3E%3Ccircle cx='48' cy='50' r='9' fill='none' stroke='%2343d9ff' stroke-width='4'/%3E%3Cpath d='M48 44v12M42 50h12' stroke='%2343d9ff' stroke-width='3.5' stroke-linecap='round'/%3E%3C/svg%3E";
       const firebaseConfig = window.FIREBASE_CONFIG || {
@@ -3046,6 +3050,31 @@
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
       }
 
+      function parseIsoDate(iso) {
+        const [y, m, d] = String(iso || "")
+          .split("-")
+          .map((v) => Number.parseInt(v, 10));
+        if (!y || !m || !d) {
+          return null;
+        }
+        const dt = new Date(y, m - 1, d);
+        dt.setHours(0, 0, 0, 0);
+        return dt;
+      }
+
+      function formatIsoDate(dt) {
+        return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+      }
+
+      function nextIsoDate(iso) {
+        const dt = parseIsoDate(iso);
+        if (!dt) {
+          return "";
+        }
+        dt.setDate(dt.getDate() + 1);
+        return formatIsoDate(dt);
+      }
+
       function penaltyStateKey() {
         const scope = currentUserId || "guest";
         return `sls_penalty_state_${PENALTY_STATE_VERSION}_${scope}`;
@@ -3072,11 +3101,17 @@
         return Math.max(0, Number.parseInt(String(state?.penaltyStreak || 0), 10) || 0);
       }
 
+      function getPenaltyArmed() {
+        const state = readPenaltyState();
+        return Boolean(state?.penaltyArmed);
+      }
+
       function getPenaltyMultiplier(streak) {
-        if (streak <= 0) {
+        // Penalty starts only after 2 consecutive missed days.
+        if (streak < 2) {
           return 1;
         }
-        if (streak === 1) {
+        if (streak <= 3) {
           return 0.5;
         }
         if (streak >= 7) {
@@ -3085,17 +3120,15 @@
         if (streak >= 4) {
           return 0.35;
         }
-        if (streak >= 2) {
-          return 0.4;
-        }
         return 1;
       }
 
       function getCurrentPenaltyInfo() {
-        const streak = getPenaltyStreak();
+        const armed = getPenaltyArmed();
+        const streak = armed ? getPenaltyStreak() : 0;
         const multiplier = getPenaltyMultiplier(streak);
         const cutPct = Math.round((1 - multiplier) * 100);
-        return { streak, multiplier, cutPct };
+        return { streak, multiplier, cutPct, armed };
       }
 
       function effectiveTaskXp(baseXp) {
@@ -3108,10 +3141,16 @@
         if (!penaltyNoteEl) {
           return;
         }
-        const { streak, cutPct } = getCurrentPenaltyInfo();
-        if (streak <= 0) {
+        const { streak, cutPct, armed } = getCurrentPenaltyInfo();
+        if (!armed) {
           penaltyNoteEl.textContent =
-            "Penalty inactive. Missed daily tasks will reduce future task XP.";
+            "Penalty locked. Complete all tasks for one full day to activate penalty tracking.";
+          return;
+        }
+        if (streak < 2) {
+          const missLeft = Math.max(0, 2 - streak);
+          penaltyNoteEl.textContent =
+            `Penalty inactive. Miss ${missLeft} more day${missLeft === 1 ? "" : "s"} in a row to activate.`;
           return;
         }
         const extra =
@@ -3152,10 +3191,21 @@
 
       function applyDailyPenaltyIfDue() {
         const targetDate = isoDaysAgo(1);
+        const prevLevel = trueLevel;
+        const prevRank = rankFromLevel(trueLevel);
+        const prevStreakForNotices = calculateStreakFromCalendar();
         const state = readPenaltyState() || {};
-        const prevStreak = Math.max(0, Number.parseInt(String(state.penaltyStreak || 0), 10) || 0);
+        let penaltyArmed = Boolean(state.penaltyArmed);
+        let nextStreak = Math.max(
+          0,
+          Number.parseInt(String(state.penaltyStreak || 0), 10) || 0,
+        );
         if (!state.lastProcessedDate) {
-          writePenaltyState({ lastProcessedDate: targetDate, penaltyStreak: prevStreak });
+          writePenaltyState({
+            lastProcessedDate: targetDate,
+            penaltyStreak: nextStreak,
+            penaltyArmed,
+          });
           refreshPenaltyNote();
           refreshQuestXpDisplay();
           updateCountsAndPreview();
@@ -3168,27 +3218,96 @@
           return;
         }
 
-        const totalTasks = questList.querySelectorAll(".quest-item").length;
-        const completed = countCompletedForDate(targetDate);
-        const missed = Math.max(0, totalTasks - completed);
-        let nextStreak = 0;
-        if (totalTasks > 0 && missed > 0) {
-          nextStreak = prevStreak + 1;
-          const penaltyXp = missed * PENALTY_XP_PER_MISSED_TASK;
-          applyXpDelta(-penaltyXp);
-          addSystemLog(
-            `[PENALTY] -${penaltyXp} XP for ${missed} missed task${missed > 1 ? "s" : ""} (${targetDate}).`,
-          );
-          renderLevel();
-          renderAnalytics();
-          renderAchievements();
-        } else {
-          nextStreak = 0;
-          if (prevStreak > 0) {
-            addSystemLog("[PENALTY] Streak reset. Full recovery started.");
+        let cursor = nextIsoDate(state.lastProcessedDate);
+        while (cursor && cursor <= targetDate) {
+          const totalTasks = questList.querySelectorAll(".quest-item").length;
+          const completed = countCompletedForDate(cursor);
+          const missed = Math.max(0, totalTasks - completed);
+          const prev = nextStreak;
+          const completedFullDay = totalTasks > 0 && completed >= totalTasks;
+
+          if (!penaltyArmed) {
+            if (completedFullDay) {
+              penaltyArmed = true;
+              nextStreak = 0;
+              addSystemLog(`[PENALTY] Tracking activated from ${cursor}.`);
+              notifyImportant(
+                "Penalty Tracking Armed",
+                "You completed a full day. Penalty tracking is now active.",
+                `penalty-armed-${cursor}`,
+              );
+            }
+            cursor = nextIsoDate(cursor);
+            continue;
           }
+
+          if (totalTasks > 0 && missed > 0) {
+            nextStreak += 1;
+
+            if (nextStreak >= 2) {
+              const penaltyXp = missed * PENALTY_XP_PER_MISSED_TASK;
+              applyXpDelta(-penaltyXp);
+              addSystemLog(
+                `[PENALTY] -${penaltyXp} XP for ${missed} missed task${missed > 1 ? "s" : ""} (${cursor}).`,
+              );
+              if (nextStreak === 2) {
+                notifyImportant(
+                  "Penalty Active",
+                  "2 consecutive missed days. Task XP reduced by 50%.",
+                  `penalty-active-${cursor}`,
+                );
+              }
+              if (nextStreak === 4) {
+                notifyImportant(
+                  "Penalty Escalated",
+                  "Miss streak reached 4 days. Penalty tier increased.",
+                  `penalty-escalate-4-${cursor}`,
+                );
+              }
+              if (nextStreak === 7) {
+                notifyImportant(
+                  "Penalty Escalated",
+                  "Miss streak reached 7 days. Severe penalty tier active.",
+                  `penalty-escalate-7-${cursor}`,
+                );
+              }
+            } else {
+              addSystemLog(`[PENALTY] Warning: 1 missed day (${cursor}).`);
+              notifyImportant(
+                "Missed Day Warning",
+                "You missed 1 day. Another miss will activate penalty.",
+                `penalty-warning-${cursor}`,
+              );
+            }
+          } else {
+            nextStreak = 0;
+            if (prev > 0) {
+              addSystemLog("[PENALTY] Streak reset. Full recovery started.");
+            }
+            if (completedFullDay && prev >= 2) {
+              penaltyArmed = false;
+              addSystemLog(
+                "[PENALTY] Recovery complete. Penalty locked again until next full-day activation.",
+              );
+              notifyImportant(
+                "Penalty Locked",
+                "Recovery complete. Penalty is locked until next activation.",
+                `penalty-locked-${cursor}`,
+              );
+            }
+          }
+          cursor = nextIsoDate(cursor);
         }
-        writePenaltyState({ lastProcessedDate: targetDate, penaltyStreak: nextStreak });
+
+        renderLevel();
+        renderAnalytics();
+        renderAchievements();
+        notifyProgressChanges(prevLevel, prevRank, prevStreakForNotices);
+        writePenaltyState({
+          lastProcessedDate: targetDate,
+          penaltyStreak: nextStreak,
+          penaltyArmed,
+        });
         refreshPenaltyNote();
         refreshQuestXpDisplay();
         updateCountsAndPreview();
@@ -3290,6 +3409,7 @@
           trueLevel,
           xpIntoLevel,
           penaltyStreak: getPenaltyStreak(),
+          penaltyArmed: getPenaltyArmed(),
           quests,
           updatedAtClient: nowIso,
           lastSyncAtISO: nowIso,
@@ -3355,10 +3475,12 @@
           hunterNameInput.value = String(cloudName || authName || "Sung Jinwoo");
           const cloudPenaltyStreak =
             Math.max(0, Number.parseInt(String(data.penaltyStreak || "0"), 10) || 0);
+          const cloudPenaltyArmed = Boolean(data.penaltyArmed);
           const localPenalty = readPenaltyState() || {};
           writePenaltyState({
             lastProcessedDate: localPenalty.lastProcessedDate || isoDaysAgo(1),
             penaltyStreak: cloudPenaltyStreak,
+            penaltyArmed: cloudPenaltyArmed || Boolean(localPenalty.penaltyArmed),
           });
           trueLevel = Math.max(
             0,
@@ -3818,7 +3940,7 @@
             <button class="quest-menu-toggle" data-action="menu" type="button" aria-label="Task menu">&#8942;</button>
             <div class="quest-menu-pop">
               <button class="quest-menu-act" data-action="edit" type="button" aria-label="Edit task">&#9998;</button>
-              <button class="quest-menu-act delete" data-action="delete" type="button" aria-label="Delete task">&#128465;</button>
+              <button class="quest-menu-act delete" data-action="delete" type="button" aria-label="Delete task">&#10006;</button>
             </div>
           </div>
         </div>
@@ -3942,6 +4064,9 @@
         }
 
       if (btn.dataset.action === "done") {
+        const prevLevel = trueLevel;
+        const prevRank = rankFromLevel(trueLevel);
+        const prevStreakForNotices = calculateStreakFromCalendar();
         const completed = item.dataset.completed === "true";
 
         if (!completed) {
@@ -3967,6 +4092,7 @@
           renderLevel();
           renderAnalytics();
           renderAchievements();
+          notifyProgressChanges(prevLevel, prevRank, prevStreakForNotices);
           queueSaveUserData();
         }
       });
@@ -4224,11 +4350,16 @@
       }
 
       function calculateStreakFromCalendar() {
-        const completedDates = new Set();
+        const totalTasks = questList.querySelectorAll(".quest-item").length;
+        if (totalTasks <= 0) {
+          return 0;
+        }
+
+        const completedByDate = {};
         questList.querySelectorAll(".quest-item.completed").forEach((item) => {
           const key = item.dataset.completedAt || "";
           if (key) {
-            completedDates.add(key);
+            completedByDate[key] = (completedByDate[key] || 0) + 1;
           }
         });
 
@@ -4238,7 +4369,7 @@
 
         while (true) {
           const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(cursor.getDate()).padStart(2, "0")}`;
-          if (!completedDates.has(key)) {
+          if ((completedByDate[key] || 0) < totalTasks) {
             break;
           }
           streak += 1;
@@ -4267,6 +4398,86 @@
           .filter(Boolean);
         const today = dayOrder[now.getDay()];
         return configured.length === 0 || configured.includes(today);
+      }
+
+      function notifyImportant(title, body, dedupeKey) {
+        if (dedupeKey) {
+          if (importantNotificationKeys.has(dedupeKey)) {
+            return;
+          }
+          importantNotificationKeys.add(dedupeKey);
+        }
+        addSystemLog(`[NOTICE] ${title}: ${body}`);
+        if ("Notification" in window && Notification.permission === "granted") {
+          const notification = new Notification(title, {
+            body,
+            icon: notificationIcon,
+            badge: notificationIcon,
+            tag: dedupeKey || `notice-${Date.now()}`,
+            renotify: false,
+            vibrate: [120, 50, 120],
+            timestamp: Date.now(),
+          });
+          notification.onclick = () => {
+            try {
+              window.focus();
+              notification.close();
+            } catch (_) {}
+          };
+        }
+      }
+
+      function getTodayTaskProgress() {
+        const totalTasks = questList.querySelectorAll(".quest-item").length;
+        const doneToday = countCompletedForDate(todayIso());
+        return { totalTasks, doneToday };
+      }
+
+      function notifyDailyAllTasksCompleteIfNeeded() {
+        const { totalTasks, doneToday } = getTodayTaskProgress();
+        if (totalTasks > 0 && doneToday >= totalTasks) {
+          const key = `daily-clear-${todayIso()}`;
+          notifyImportant("Daily Clear", "All today's tasks are completed.", key);
+        }
+      }
+
+      function notifyProgressChanges(prevLevel, prevRank, prevStreak) {
+        const nextLevel = trueLevel;
+        const nextRank = rankFromLevel(trueLevel);
+        const nextStreak = calculateStreakFromCalendar();
+        const todayKey = todayIso();
+
+        if (nextLevel > prevLevel) {
+          notifyImportant(
+            "Level Up",
+            `You reached Level ${nextLevel}.`,
+            `level-up-${nextLevel}`,
+          );
+        }
+        if (nextRank !== prevRank) {
+          notifyImportant(
+            "Rank Up",
+            `Rank changed: ${prevRank} -> ${nextRank}.`,
+            `rank-up-${nextRank}`,
+          );
+        }
+        if (prevStreak > 0 && nextStreak === 0) {
+          notifyImportant(
+            "Streak Broken",
+            "Your full-day completion streak has been broken.",
+            `streak-broken-${todayKey}`,
+          );
+        }
+        streakMilestones.forEach((milestone) => {
+          if (prevStreak < milestone && nextStreak >= milestone) {
+            notifyImportant(
+              "Streak Milestone",
+              `${milestone}-day full completion streak achieved.`,
+              `streak-milestone-${milestone}-${todayKey}`,
+            );
+          }
+        });
+        notifyDailyAllTasksCompleteIfNeeded();
       }
 
       function maybeFireNotifications() {
@@ -4312,6 +4523,7 @@
                 notification.close();
               } catch (_) {}
             };
+            addSystemLog(`[REMINDER] ${title} - ${body}`);
           } else {
             console.log(`Reminder: ${title} - ${body}`);
           }
