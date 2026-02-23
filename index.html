@@ -1356,6 +1356,10 @@
         box-shadow: inset 0 0 10px rgba(61, 126, 255, 0.15);
       }
 
+      .q-input-wrap.with-unit {
+        grid-template-columns: 24px 1fr auto;
+      }
+
       .q-input-wrap .q-icon {
         color: #42beff;
         font-size: 0.95rem;
@@ -1375,6 +1379,20 @@
 
       .q-input::placeholder {
         color: rgba(219, 230, 248, 0.42);
+      }
+
+      .q-unit {
+        border: 1px solid rgba(103, 205, 255, 0.35);
+        border-radius: 8px;
+        background: rgba(16, 36, 72, 0.78);
+        color: #dcecff;
+        font:
+          700 0.68rem "Orbitron",
+          sans-serif;
+        letter-spacing: 0.3px;
+        text-transform: uppercase;
+        outline: none;
+        padding: 4px 7px;
       }
 
       .q-input.invalid {
@@ -2341,7 +2359,7 @@
                       <label class="q-label" for="reps-input"
                         >Repetitions</label
                       >
-                      <div class="q-input-wrap">
+                      <div class="q-input-wrap with-unit">
                         <span class="q-icon" aria-hidden="true">&#8645;</span>
                         <input
                           class="q-input"
@@ -2349,6 +2367,10 @@
                           maxlength="15"
                           placeholder="e.g., 20, 30, 10 minutes"
                         />
+                        <select class="q-unit" id="reps-unit-select" aria-label="Repetition unit">
+                          <option value="reps">reps</option>
+                          <option value="min">min</option>
+                        </select>
                       </div>
                       <p class="q-count"><span id="reps-count">0</span>/15</p>
                       <p class="q-xp" id="attribute-xp">XP Reward: 0</p>
@@ -2728,6 +2750,7 @@
       const questCreate = document.getElementById("quest-create");
       const taskTitleInput = document.getElementById("task-title-input");
       const repsInput = document.getElementById("reps-input");
+      const repsUnitSelect = document.getElementById("reps-unit-select");
       const attributeSelect = document.getElementById("attribute-select");
       const overallTitleInput = document.getElementById("overall-title-input");
       const durationInput = document.getElementById("duration-input");
@@ -3889,6 +3912,9 @@
         repsCount.textContent = String(repsInput.value.length);
         overallTitleCount.textContent = String(overallTitleInput.value.length);
         durationCount.textContent = String(durationInput.value.length);
+        const repsPreview = repsInput.value.trim()
+          ? `${repsInput.value.trim()} ${repsUnitSelect.value || "reps"}`
+          : "set reps";
         attributeXp.textContent = `XP Reward: ${currentTaskXp()} (${attributeSelect.value})`;
         overallAttributeXp.textContent = `XP Reward: ${currentOverallTaskXp()} (${overallAttributeSelect.value})`;
         setAttributeStyle(attributeSelect, attrIcon, attrWrap);
@@ -3898,7 +3924,7 @@
           overallAttrWrap,
         );
         if (taskTitleInput.value.trim()) {
-          taskPreview.innerHTML = `<span class="q-icon" aria-hidden="true">&#128065;</span>${taskTitleInput.value.trim()} (${repsInput.value.trim() || "set reps"})`;
+          taskPreview.innerHTML = `<span class="q-icon" aria-hidden="true">&#128065;</span>${taskTitleInput.value.trim()} (${repsPreview})`;
         } else {
           taskPreview.innerHTML = `<span class="q-icon" aria-hidden="true">&#128065;</span>Enter task title to see preview`;
         }
@@ -3924,7 +3950,7 @@
         item.dataset.reminderMsg = "";
         item.innerHTML = `
         <div class="quest-left">
-          <span aria-hidden="true">&#8942;</span>
+          <span aria-hidden="true">&#9876;</span>
         </div>
         <div class="quest-main">
           <p class="name">${title}</p>
@@ -3972,11 +3998,13 @@
       questCancel.addEventListener("click", closeQuestModal);
       questCreate.addEventListener("click", () => {
         const isSingle = taskMode === "single";
+        const singleRepsRaw = repsInput.value.trim();
+        const singleUnit = repsUnitSelect.value || "reps";
         const title = isSingle
           ? taskTitleInput.value.trim()
           : overallTitleInput.value.trim();
         const reps = isSingle
-          ? repsInput.value.trim()
+          ? (singleRepsRaw ? `${singleRepsRaw} ${singleUnit}` : "")
           : `${durationInput.value.trim() || "0"} min`;
         const attrKey = isSingle
           ? attributeSelect.value
@@ -3991,7 +4019,7 @@
           return;
         }
 
-        if (isSingle && !reps) {
+        if (isSingle && !singleRepsRaw) {
           repsInput.classList.add("invalid");
           repsInput.focus();
           return;
@@ -4010,6 +4038,7 @@
 
         taskTitleInput.value = "";
         repsInput.value = "";
+        repsUnitSelect.value = "reps";
         overallTitleInput.value = "";
         durationInput.value = "";
         attributeSelect.value = "STR";
@@ -4107,6 +4136,7 @@
         repsInput.classList.remove("invalid");
         updateCountsAndPreview();
       });
+      repsUnitSelect.addEventListener("change", updateCountsAndPreview);
       overallTitleInput.addEventListener("input", updateCountsAndPreview);
       durationInput.addEventListener("input", updateCountsAndPreview);
       attributeSelect.addEventListener("change", updateCountsAndPreview);
