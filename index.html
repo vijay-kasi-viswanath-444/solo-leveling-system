@@ -4410,24 +4410,35 @@
 
       function shouldNotifyTask(task, now) {
         if (task.dataset.reminderOn !== "true") {
-          return false;
+          return "";
         }
         const time = task.dataset.reminderTime || "";
         const match = time.match(/^(\d{2}):(\d{2})$/);
         if (!match) {
-          return false;
+          return "";
         }
         const hour = Number.parseInt(match[1], 10);
         const minute = Number.parseInt(match[2], 10);
-        if (now.getHours() !== hour || now.getMinutes() !== minute) {
-          return false;
-        }
         const configured = (task.dataset.reminderDays || "")
           .split(",")
           .map((d) => d.trim())
           .filter(Boolean);
         const today = dayOrder[now.getDay()];
-        return configured.length === 0 || configured.includes(today);
+        if (!(configured.length === 0 || configured.includes(today))) {
+          return "";
+        }
+
+        // Mobile browsers often pause timers; allow a short catch-up window.
+        const scheduled = new Date(now);
+        scheduled.setSeconds(0, 0);
+        scheduled.setHours(hour, minute, 0, 0);
+        const lagMs = now.getTime() - scheduled.getTime();
+        if (lagMs < 0 || lagMs > 5 * 60 * 1000) {
+          return "";
+        }
+
+        const dayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+        return `${dayKey}-${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
       }
 
       function notifyImportant(title, body, dedupeKey) {
@@ -4512,12 +4523,12 @@
 
       function maybeFireNotifications() {
         const now = new Date();
-        const minuteKey = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}-${now.getHours()}-${now.getMinutes()}`;
         questList.querySelectorAll(".quest-item").forEach((task, idx) => {
-          if (!shouldNotifyTask(task, now)) {
+          const slotKey = shouldNotifyTask(task, now);
+          if (!slotKey) {
             return;
           }
-          const key = `${minuteKey}-${idx}-${task.querySelector(".name")?.textContent || "task"}`;
+          const key = `${slotKey}-${idx}-${task.querySelector(".name")?.textContent || "task"}`;
           if (firedNotificationKeys.has(key)) {
             return;
           }
@@ -4555,7 +4566,7 @@
             };
             addSystemLog(`[REMINDER] ${title} - ${body}`);
           } else {
-            console.log(`Reminder: ${title} - ${body}`);
+            addSystemLog(`[REMINDER] Notification blocked. ${title} - ${body}`);
           }
         });
         if (firedNotificationKeys.size > 600) {
@@ -4800,7 +4811,14 @@
     maybeFireNotifications();
     initShadowSummon();
     initLevelParticles();
-    setInterval(maybeFireNotifications, 30000);
+    setInterval(maybeFireNotifications, 15000);
+    window.addEventListener("focus", maybeFireNotifications);
+    window.addEventListener("pageshow", maybeFireNotifications);
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) {
+        maybeFireNotifications();
+      }
+    });
 
     if (
       "serviceWorker" in navigator &&
