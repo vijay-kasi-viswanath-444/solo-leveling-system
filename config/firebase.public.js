@@ -3,8 +3,6 @@ window.FIREBASE_CONFIG = {
   authDomain: "",
   projectId: "",
   storageBucket: "",
-  messagingSenderId: "",
   appId: "",
-  measurementId: "",
-  webPushVapidKey: ""
+  measurementId: ""
 };

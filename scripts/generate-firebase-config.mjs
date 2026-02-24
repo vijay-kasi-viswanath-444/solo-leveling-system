@@ -47,10 +47,8 @@ const config = {
   authDomain: env.FIREBASE_AUTH_DOMAIN || "",
   projectId: env.FIREBASE_PROJECT_ID || "",
   storageBucket: env.FIREBASE_STORAGE_BUCKET || "",
-  messagingSenderId: env.FIREBASE_MESSAGING_SENDER_ID || "",
   appId: env.FIREBASE_APP_ID || "",
-  measurementId: env.FIREBASE_MEASUREMENT_ID || "",
-  webPushVapidKey: env.FIREBASE_WEB_PUSH_VAPID_KEY || ""
+  measurementId: env.FIREBASE_MEASUREMENT_ID || ""
 };
 
 const js = `window.FIREBASE_CONFIG = ${JSON.stringify(config, null, 2)};\n`;
