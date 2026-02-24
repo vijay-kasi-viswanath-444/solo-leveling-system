@@ -4,5 +4,6 @@ window.FIREBASE_CONFIG = {
   projectId: "YOUR_PROJECT_ID",
   storageBucket: "YOUR_PROJECT.appspot.com",
   messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  appId: "YOUR_APP_ID",
+  webPushVapidKey: "YOUR_WEB_PUSH_VAPID_KEY"
 };

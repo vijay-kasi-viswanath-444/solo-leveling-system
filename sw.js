@@ -73,3 +73,24 @@ self.addEventListener("fetch", (event) => {
     })
   );
 });
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+      for (const client of list) {
+        if ("focus" in client) {
+          client.focus();
+          if ("navigate" in client) {
+            client.navigate("./index.html#quests");
+          }
+          return;
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow("./index.html#quests");
+      }
+      return null;
+    }),
+  );
+});

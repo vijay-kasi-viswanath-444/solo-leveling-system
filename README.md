@@ -13,6 +13,8 @@ Solo Leveling inspired mobile-first web app with:
 - HTML, CSS, Vanilla JavaScript
 - Firebase Auth (Google provider)
 - Cloud Firestore
+- Firebase Cloud Messaging (web push)
+- Cloud Functions (scheduled reminders)
 - Firebase Hosting
 - Service Worker + Web App Manifest
 
@@ -56,6 +58,12 @@ cp .env.example .env
 node scripts/generate-firebase-config.mjs
 ```
 
+Add web push key in `.env` before generating config:
+
+```bash
+FIREBASE_WEB_PUSH_VAPID_KEY=YOUR_WEB_PUSH_VAPID_KEY
+```
+
 4. Run local server:
 
 ```bash
@@ -89,6 +97,31 @@ service cloud.firestore {
   }
 }
 ```
+
+5. Enable Cloud Messaging and generate a Web Push certificate key pair.
+6. Put the public key into `.env` as `FIREBASE_WEB_PUSH_VAPID_KEY`.
+
+## Android Push Setup
+
+1. Install function dependencies:
+
+```bash
+npm --prefix functions install
+```
+
+2. Deploy functions + hosting:
+
+```bash
+firebase deploy --only functions,hosting
+```
+
+3. On Android Chrome:
+- Open the HTTPS site
+- Sign in
+- Enable notification permission when prompted
+- Keep at least one reminder-enabled task
+
+Scheduler runs every 5 minutes and sends due reminders via FCM.
 
 4. Add authorized domains:
 - `localhost`

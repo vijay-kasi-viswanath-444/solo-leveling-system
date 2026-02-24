@@ -1,4 +1,7 @@
 {
+  "functions": {
+    "source": "functions"
+  },
   "hosting": {
     "predeploy": [
       "node scripts/generate-firebase-config.mjs"

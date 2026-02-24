@@ -2740,6 +2740,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-messaging-compat.js"></script>
     <script>
       const appEl = document.querySelector(".app");
       const tabs = document.querySelectorAll(".tab");
@@ -2854,8 +2855,12 @@
         projectId: "",
         messagingSenderId: "",
         appId: "",
+        webPushVapidKey: "",
       };
+      const appSwVersion = "2026-02-24-android-1";
       let db = null;
+      let messaging = null;
+      let messagingOnMessageBound = false;
       let currentUserId = "";
       let isHydratingFromCloud = false;
       let saveTimer = null;
@@ -2955,6 +2960,121 @@
         editingTask = null;
       }
 
+      function tokenDocId(token) {
+        return btoa(unescape(encodeURIComponent(token)))
+          .replace(/[+/=]/g, "_")
+          .slice(0, 180);
+      }
+
+      async function getOrRegisterServiceWorker() {
+        if (!("serviceWorker" in navigator) || window.location.protocol !== "https:") {
+          return null;
+        }
+        const existing = await navigator.serviceWorker.getRegistration();
+        if (existing) {
+          return existing;
+        }
+        return navigator.serviceWorker.register(`./sw.js?v=${appSwVersion}`);
+      }
+
+      async function bindForegroundPushHandler() {
+        if (!messaging || messagingOnMessageBound) {
+          return;
+        }
+        messaging.onMessage((payload) => {
+          const title = payload?.notification?.title || "Hunter Quest";
+          const body =
+            payload?.notification?.body ||
+            payload?.data?.body ||
+            "Task reminder";
+          addSystemLog(`[PUSH] ${title} - ${body}`);
+          if ("Notification" in window && Notification.permission === "granted") {
+            try {
+              const notification = new Notification(title, {
+                body,
+                icon: notificationIcon,
+                badge: notificationIcon,
+                tag: payload?.data?.slotKey || `push-${Date.now()}`,
+                renotify: false,
+                timestamp: Date.now(),
+              });
+              notification.onclick = () => {
+                try {
+                  window.focus();
+                  notification.close();
+                } catch (_) {}
+              };
+            } catch (_) {}
+          }
+        });
+        messagingOnMessageBound = true;
+      }
+
+      async function registerPushTokenForUser(uid) {
+        if (!uid || !db || !firebaseConfig.webPushVapidKey) {
+          return;
+        }
+        if (
+          typeof firebase === "undefined" ||
+          typeof firebase.messaging === "undefined"
+        ) {
+          return;
+        }
+        if (!("Notification" in window)) {
+          addSystemLog("[PUSH] Notifications are not supported in this browser.");
+          return;
+        }
+        if (Notification.permission === "denied") {
+          addSystemLog("[PUSH] Notification permission denied.");
+          return;
+        }
+        if (Notification.permission === "default") {
+          const perm = await Notification.requestPermission();
+          if (perm !== "granted") {
+            addSystemLog("[PUSH] Notification permission not granted.");
+            return;
+          }
+        }
+        const swReg = await getOrRegisterServiceWorker();
+        if (!swReg) {
+          addSystemLog("[PUSH] Service worker unavailable.");
+          return;
+        }
+        try {
+          messaging = messaging || firebase.messaging();
+          await bindForegroundPushHandler();
+          const token = await messaging.getToken({
+            vapidKey: firebaseConfig.webPushVapidKey,
+            serviceWorkerRegistration: swReg,
+          });
+          if (!token) {
+            addSystemLog("[PUSH] FCM token unavailable.");
+            return;
+          }
+          const tokenRef = db
+            .collection("users")
+            .doc(uid)
+            .collection("devices")
+            .doc(tokenDocId(token));
+          await tokenRef.set(
+            {
+              token,
+              platform: /android/i.test(navigator.userAgent) ? "android" : "web",
+              userAgent: navigator.userAgent || "",
+              language: navigator.language || "",
+              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+              pushEnabled: true,
+              updatedAtClient: new Date().toISOString(),
+              updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            },
+            { merge: true },
+          );
+          addSystemLog("[PUSH] Device registered for push reminders.");
+        } catch (err) {
+          addSystemLog(`[PUSH] Token registration failed: ${err.message}`);
+        }
+      }
+
       function initFirebaseAuth() {
         const configured = Boolean(
           firebaseConfig.apiKey &&
@@ -3005,6 +3125,7 @@
             : "SYNC: --";
           if (isLogged) {
             await loadUserData(user.uid);
+            registerPushTokenForUser(user.uid);
           }
         });
 
@@ -3431,6 +3552,7 @@
         const nowIso = new Date().toISOString();
         const payload = {
           name: cleanName,
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
           trueLevel,
           xpIntoLevel,
           penaltyStreak: getPenaltyStreak(),
@@ -4158,6 +4280,9 @@
         ) {
           Notification.requestPermission();
         }
+        if (isOn && currentUserId) {
+          registerPushTokenForUser(currentUserId);
+        }
       });
       editTimeClear.addEventListener("click", () => {
         setTimeSelectorsFrom24("09:00");
@@ -4836,9 +4961,8 @@
           window.location.reload();
         });
 
-        const swVersion = "2026-02-22-3";
         navigator.serviceWorker
-          .register(`./sw.js?v=${swVersion}`)
+          .register(`./sw.js?v=${appSwVersion}`)
           .then((registration) => {
             registration.update();
             if (registration.waiting) {
