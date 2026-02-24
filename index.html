@@ -2683,6 +2683,14 @@
                 >
                   Sync
                 </button>
+                <button
+                  class="auth-btn"
+                  id="auth-notify-btn"
+                  type="button"
+                  style="display: none"
+                >
+                  Allow Notifications
+                </button>
               </div>
               <p class="auth-status" id="auth-status">
                 Firebase not configured. Add your config in script.
@@ -2779,6 +2787,7 @@
       const authGoogleBtn = document.getElementById("auth-google-btn");
       const authLogoutBtn = document.getElementById("auth-logout-btn");
       const authSyncBtn = document.getElementById("auth-sync-btn");
+      const authNotifyBtn = document.getElementById("auth-notify-btn");
       const authStatus = document.getElementById("auth-status");
       const authSyncStatus = document.getElementById("auth-sync-status");
       const achievementsList = document.getElementById("achievements-list");
@@ -2860,6 +2869,8 @@
       let isHydratingFromCloud = false;
       let saveTimer = null;
       const defaultGoogleBtnText = "Sign In with Google";
+      const defaultNotifyBtnText = "Allow Notifications";
+      const notificationPromptedUsers = new Set();
 
       function setActiveView(target) {
         const safeTarget = [
@@ -2955,6 +2966,71 @@
         editingTask = null;
       }
 
+      function updateNotificationButtonState(isLogged) {
+        if (!authNotifyBtn) {
+          return;
+        }
+        if (!isLogged) {
+          authNotifyBtn.style.display = "none";
+          authNotifyBtn.disabled = true;
+          authNotifyBtn.textContent = defaultNotifyBtnText;
+          return;
+        }
+        authNotifyBtn.style.display = "";
+        if (!("Notification" in window)) {
+          authNotifyBtn.disabled = true;
+          authNotifyBtn.textContent = "Notifications Unsupported";
+          return;
+        }
+        if (Notification.permission === "granted") {
+          authNotifyBtn.disabled = true;
+          authNotifyBtn.textContent = "Notifications On";
+          return;
+        }
+        if (Notification.permission === "denied") {
+          authNotifyBtn.disabled = true;
+          authNotifyBtn.textContent = "Notifications Blocked";
+          return;
+        }
+        authNotifyBtn.disabled = false;
+        authNotifyBtn.textContent = defaultNotifyBtnText;
+      }
+
+      async function requestNotificationAccess(source) {
+        if (!("Notification" in window)) {
+          authStatus.textContent = "Notifications are not supported on this browser.";
+          updateNotificationButtonState(Boolean(currentUserId));
+          return;
+        }
+        if (Notification.permission === "granted") {
+          authStatus.textContent = "Notifications already enabled.";
+          updateNotificationButtonState(Boolean(currentUserId));
+          return;
+        }
+        if (Notification.permission === "denied") {
+          authStatus.textContent =
+            "Notifications are blocked. Enable them from browser site settings.";
+          updateNotificationButtonState(Boolean(currentUserId));
+          return;
+        }
+        try {
+          const result = await Notification.requestPermission();
+          if (result === "granted") {
+            authStatus.textContent = "Notifications enabled.";
+            addSystemLog("[NOTICE] Notifications enabled.");
+          } else if (source === "login") {
+            authStatus.textContent =
+              "Notification permission skipped. You can enable it with the button.";
+          } else {
+            authStatus.textContent =
+              "Notification permission not granted. You can try again from the button.";
+          }
+        } catch (err) {
+          authStatus.textContent = `Notification permission failed: ${err.message}`;
+        }
+        updateNotificationButtonState(Boolean(currentUserId));
+      }
+
       function initFirebaseAuth() {
         const configured = Boolean(
           firebaseConfig.apiKey &&
@@ -2975,6 +3051,8 @@
           authLogoutBtn.disabled = true;
           authSyncBtn.style.display = "none";
           authSyncBtn.disabled = true;
+          authNotifyBtn.style.display = "none";
+          authNotifyBtn.disabled = true;
           return;
         }
         if (!firebase.apps.length) {
@@ -3000,11 +3078,16 @@
           authLogoutBtn.disabled = !isLogged;
           authSyncBtn.style.display = isLogged ? "" : "none";
           authSyncBtn.disabled = !isLogged;
+          updateNotificationButtonState(isLogged);
           authSyncStatus.textContent = isLogged
             ? "SYNC: loading cloud data..."
             : "SYNC: --";
           if (isLogged) {
             await loadUserData(user.uid);
+            if (!notificationPromptedUsers.has(user.uid)) {
+              notificationPromptedUsers.add(user.uid);
+              await requestNotificationAccess("login");
+            }
           }
         });
 
@@ -3033,6 +3116,13 @@
           authSyncStatus.textContent = "SYNC: syncing...";
           await saveUserData();
           await loadUserData(currentUserId);
+        });
+        authNotifyBtn.addEventListener("click", async () => {
+          if (!currentUserId) {
+            authStatus.textContent = "Login first to enable notifications.";
+            return;
+          }
+          await requestNotificationAccess("manual");
         });
 
       }
