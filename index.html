@@ -2756,7 +2756,6 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-functions-compat.js"></script>
     <script>
       const appEl = document.querySelector(".app");
       const tabs = document.querySelectorAll(".tab");
@@ -2877,6 +2876,7 @@
         appId: "",
       };
       const appSwVersion = "2026-02-24-android-1";
+      const ENABLE_CLOUD_PUSH = false;
       let db = null;
       let functionsApi = null;
       let currentUserId = "";
@@ -3315,6 +3315,9 @@
       }
 
       async function bindNativePushListeners() {
+        if (!ENABLE_CLOUD_PUSH) {
+          return;
+        }
         if (nativePushListenersBound || !isNativePushRuntime()) {
           return;
         }
@@ -3351,6 +3354,9 @@
       }
 
       async function syncNativePushRegistration() {
+        if (!ENABLE_CLOUD_PUSH) {
+          return false;
+        }
         if (!isNativePushRuntime() || !currentUserId) {
           return false;
         }
@@ -3381,6 +3387,11 @@
       }
 
       async function sendTestPushToCurrentUser() {
+        if (!ENABLE_CLOUD_PUSH) {
+          authStatus.textContent =
+            "Cloud push is disabled in this build (local reminders only).";
+          return;
+        }
         if (!currentUserId) {
           authStatus.textContent = "Login first to send test push.";
           return;
@@ -3652,7 +3663,9 @@
         const auth = firebase.auth();
         db = firebase.firestore();
         functionsApi =
-          typeof firebase.functions === "function" ? firebase.functions() : null;
+          ENABLE_CLOUD_PUSH && typeof firebase.functions === "function"
+            ? firebase.functions()
+            : null;
         const provider = new firebase.auth.GoogleAuthProvider();
         provider.setCustomParameters({ prompt: "select_account" });
         auth
@@ -3671,7 +3684,8 @@
           authLogoutBtn.disabled = !isLogged;
           authSyncBtn.style.display = isLogged ? "" : "none";
           authSyncBtn.disabled = !isLogged;
-          authTestPushBtn.style.display = isLogged ? "" : "none";
+          authTestPushBtn.style.display =
+            isLogged && ENABLE_CLOUD_PUSH ? "" : "none";
           authTestPushBtn.disabled = !isLogged;
           updateNotificationButtonState(isLogged);
           authSyncStatus.textContent = isLogged
@@ -3735,9 +3749,11 @@
           }
           await requestNotificationAccess("manual");
         });
-        authTestPushBtn.addEventListener("click", async () => {
-          await sendTestPushToCurrentUser();
-        });
+        if (ENABLE_CLOUD_PUSH) {
+          authTestPushBtn.addEventListener("click", async () => {
+            await sendTestPushToCurrentUser();
+          });
+        }
 
       }
 
