@@ -1,0 +1,33 @@
+{
+    "name": "pmb",
+    "version": "1.0.0",
+    "description": "Solo Leveling inspired mobile-first web app with:\r - Hunter profile (level, rank, title, XP, streak)\r - Quest management (single/overall tasks, done/undone, edit, reminders)\r - Analytics (weekly completion + progress calendar)\r - Achievements (dynamic unlocks)\r - Firebase Google Auth + Firestore sync\r - PWA support (installable web app)",
+    "main": "sw.js",
+    "scripts": {
+        "build:web": "node scripts/prepare-capacitor-web.cjs",
+        "android:sync": "npm run build:web && npx cap sync android",
+        "android:open": "npx cap open android",
+        "functions:install": "npm --prefix functions install",
+        "functions:deploy": "firebase deploy --only functions",
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/vijay-kasi-viswanath-444/solo-leveling-system.git"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "type": "commonjs",
+    "bugs": {
+        "url": "https://github.com/vijay-kasi-viswanath-444/solo-leveling-system/issues"
+    },
+    "homepage": "https://github.com/vijay-kasi-viswanath-444/solo-leveling-system#readme",
+    "dependencies": {
+        "@capacitor/android": "^8.1.0",
+        "@capacitor/cli": "^8.1.0",
+        "@capacitor/core": "^8.1.0",
+        "@capacitor/local-notifications": "^8.0.1",
+        "@capacitor/push-notifications": "^8.0.1"
+    }
+}

@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "480144591802",
+    "project_id": "solo-leveling-system-adf64",
+    "storage_bucket": "solo-leveling-system-adf64.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:480144591802:android:81d1f1a6a633fab085eb83",
+        "android_client_info": {
+          "package_name": "com.pmb.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "480144591802-rpbrrumrmqtf9q9du3243ledtnof3mb1.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDuWkNl07a8P7o-mQs6BVFdpZieD_OiBys"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "480144591802-rpbrrumrmqtf9q9du3243ledtnof3mb1.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

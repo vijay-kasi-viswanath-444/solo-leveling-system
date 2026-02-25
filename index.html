@@ -2691,6 +2691,14 @@
                 >
                   Allow Notifications
                 </button>
+                <button
+                  class="auth-btn"
+                  id="auth-test-push-btn"
+                  type="button"
+                  style="display: none"
+                >
+                  Send Test Push
+                </button>
               </div>
               <p class="auth-status" id="auth-status">
                 Firebase not configured. Add your config in script.
@@ -2748,6 +2756,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-functions-compat.js"></script>
     <script>
       const appEl = document.querySelector(".app");
       const tabs = document.querySelectorAll(".tab");
@@ -2788,6 +2797,7 @@
       const authLogoutBtn = document.getElementById("auth-logout-btn");
       const authSyncBtn = document.getElementById("auth-sync-btn");
       const authNotifyBtn = document.getElementById("auth-notify-btn");
+      const authTestPushBtn = document.getElementById("auth-test-push-btn");
       const authStatus = document.getElementById("auth-status");
       const authSyncStatus = document.getElementById("auth-sync-status");
       const achievementsList = document.getElementById("achievements-list");
@@ -2852,6 +2862,9 @@
       let analyticsMonth = nowForCalendar.getMonth();
       let analyticsYear = nowForCalendar.getFullYear();
       const dayOrder = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      const REMINDER_SCHEMA_VERSION = 2;
+      const DEFAULT_REMINDER_TIME = "09:00";
+      const reminderDaySet = new Set(dayOrder);
       const firedNotificationKeys = new Set();
       const importantNotificationKeys = new Set();
       const streakMilestones = [3, 7, 14, 30, 60, 100];
@@ -2865,12 +2878,551 @@
       };
       const appSwVersion = "2026-02-24-android-1";
       let db = null;
+      let functionsApi = null;
       let currentUserId = "";
       let isHydratingFromCloud = false;
       let saveTimer = null;
       const defaultGoogleBtnText = "Sign In with Google";
       const defaultNotifyBtnText = "Allow Notifications";
       const notificationPromptedUsers = new Set();
+      const PUSH_INSTALLATION_KEY = "pmb_push_installation_id";
+
+      function generateTaskId() {
+        if (window.crypto && typeof window.crypto.randomUUID === "function") {
+          return window.crypto.randomUUID();
+        }
+        return `task-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      }
+
+      function ensureTaskId(task) {
+        if (!task.dataset.taskId) {
+          task.dataset.taskId = generateTaskId();
+        }
+        return task.dataset.taskId;
+      }
+
+      function normalizeReminderTime24(value) {
+        const raw = String(value || DEFAULT_REMINDER_TIME).trim();
+        const match = raw.match(/^(\d{1,2}):(\d{2})$/);
+        if (!match) {
+          return DEFAULT_REMINDER_TIME;
+        }
+        const hour = Number.parseInt(match[1], 10);
+        const minute = Number.parseInt(match[2], 10);
+        if (
+          !Number.isFinite(hour) ||
+          !Number.isFinite(minute) ||
+          hour < 0 ||
+          hour > 23 ||
+          minute < 0 ||
+          minute > 59
+        ) {
+          return DEFAULT_REMINDER_TIME;
+        }
+        return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+      }
+
+      function normalizeReminderDays(value) {
+        const source = Array.isArray(value)
+          ? value
+          : String(value || "")
+              .split(",")
+              .map((d) => d.trim())
+              .filter(Boolean);
+        const seen = new Set();
+        source.forEach((day) => {
+          const label = String(day || "").trim();
+          if (reminderDaySet.has(label)) {
+            seen.add(label);
+          }
+        });
+        return Array.from(seen);
+      }
+
+      function buildReminderFromAny(source, legacy) {
+        const reminderSrc =
+          source && typeof source === "object" ? source : {};
+        const legacySrc = legacy && typeof legacy === "object" ? legacy : {};
+        const enabled = Boolean(
+          reminderSrc.enabled ?? reminderSrc.on ?? legacySrc.reminderOn,
+        );
+        const time24 = normalizeReminderTime24(
+          reminderSrc.time24 || reminderSrc.time || legacySrc.reminderTime,
+        );
+        const days = normalizeReminderDays(
+          reminderSrc.days ?? legacySrc.reminderDays,
+        );
+        const message = String(
+          reminderSrc.message ??
+            reminderSrc.msg ??
+            legacySrc.reminderMsg ??
+            "",
+        ).trim();
+        const timezone = String(
+          reminderSrc.timezone ||
+            legacySrc.reminderTimezone ||
+            Intl.DateTimeFormat().resolvedOptions().timeZone ||
+            "UTC",
+        );
+        return {
+          enabled,
+          time24,
+          days,
+          message,
+          timezone,
+        };
+      }
+
+      function applyReminderToTaskDataset(task, reminder) {
+        const normalized = buildReminderFromAny(reminder);
+        task.dataset.reminderOn = normalized.enabled ? "true" : "false";
+        task.dataset.reminderTime = normalized.time24;
+        task.dataset.reminderDays = normalized.days.join(",");
+        task.dataset.reminderMsg = normalized.message;
+        task.dataset.reminderTimezone = normalized.timezone;
+        return normalized;
+      }
+
+      function getReminderFromTaskDataset(task) {
+        return buildReminderFromAny({
+          enabled: task.dataset.reminderOn === "true",
+          time24: task.dataset.reminderTime,
+          days: task.dataset.reminderDays,
+          message: task.dataset.reminderMsg,
+          timezone: task.dataset.reminderTimezone,
+        });
+      }
+
+      function getCapacitorLocalNotificationsPlugin() {
+        return window.Capacitor?.Plugins?.LocalNotifications || null;
+      }
+
+      function isNativeNotificationRuntime() {
+        return Boolean(
+          window.Capacitor &&
+            typeof window.Capacitor.isNativePlatform === "function" &&
+            window.Capacitor.isNativePlatform() &&
+            getCapacitorLocalNotificationsPlugin(),
+        );
+      }
+
+      function dayToNativeWeekday(dayLabel) {
+        const map = {
+          Sun: 1,
+          Mon: 2,
+          Tue: 3,
+          Wed: 4,
+          Thu: 5,
+          Fri: 6,
+          Sat: 7,
+        };
+        return map[String(dayLabel || "").trim()] || 0;
+      }
+
+      function time24ToHourMinute(value) {
+        const match = String(value || "").match(/^(\d{2}):(\d{2})$/);
+        if (!match) {
+          return null;
+        }
+        return {
+          hour: Number.parseInt(match[1], 10),
+          minute: Number.parseInt(match[2], 10),
+        };
+      }
+
+      function stableIntFromString(input) {
+        const max = 2147483000;
+        let hash = 0;
+        const text = String(input || "");
+        for (let i = 0; i < text.length; i += 1) {
+          hash = (hash * 31 + text.charCodeAt(i)) % max;
+        }
+        return hash + 1;
+      }
+
+      function buildNativeReminderNotifications() {
+        const notifications = [];
+        questList.querySelectorAll(".quest-item").forEach((task) => {
+          const reminder = getReminderFromTaskDataset(task);
+          if (!reminder.enabled) {
+            return;
+          }
+          const slot = time24ToHourMinute(reminder.time24);
+          if (!slot) {
+            return;
+          }
+          const taskId = ensureTaskId(task);
+          const title =
+            task.querySelector(".name")?.textContent?.trim() || "Task Reminder";
+          const reps = task.querySelector(".quest-reps")?.textContent || "";
+          const xp = task.querySelector(".quest-xp")?.textContent || "";
+          const body = reminder.message || `Now: ${reps}  ${xp}`.trim();
+          const days = reminder.days.length > 0 ? reminder.days : ["daily"];
+
+          days.forEach((dayLabel) => {
+            const slotKey = `${dayLabel}-${slot.hour}:${slot.minute}`;
+            const id = stableIntFromString(`${taskId}-${slotKey}`);
+            const schedule =
+              dayLabel === "daily"
+                ? {
+                    on: {
+                      hour: slot.hour,
+                      minute: slot.minute,
+                    },
+                    repeats: true,
+                  }
+                : {
+                    on: {
+                      weekday: dayToNativeWeekday(dayLabel),
+                      hour: slot.hour,
+                      minute: slot.minute,
+                    },
+                    repeats: true,
+                  };
+            notifications.push({
+              id,
+              title: `Hunter Quest: ${title}`,
+              body: body || "It is time for your quest.",
+              schedule,
+              channelId: "task-reminders",
+              extra: {
+                kind: "task-reminder",
+                taskId,
+                slotKey,
+              },
+            });
+          });
+        });
+        return notifications;
+      }
+
+      async function ensureNativeReminderChannel(localNotifications) {
+        try {
+          await localNotifications.createChannel({
+            id: "task-reminders",
+            name: "Task Reminders",
+            description: "Scheduled reminders for your quests.",
+            importance: 4,
+            visibility: 1,
+            vibration: true,
+          });
+        } catch (_) {}
+      }
+
+      async function checkNativeExactAlarmState(localNotifications) {
+        if (
+          !localNotifications ||
+          typeof localNotifications.checkExactNotificationSetting !== "function"
+        ) {
+          return "unknown";
+        }
+        try {
+          const exact = await localNotifications.checkExactNotificationSetting();
+          return exact?.exact_alarm || "unknown";
+        } catch (_) {
+          return "unknown";
+        }
+      }
+
+      async function maybePromptExactAlarmAccess(localNotifications, source) {
+        if (
+          source !== "manual" ||
+          !localNotifications ||
+          typeof localNotifications.changeExactNotificationSetting !== "function"
+        ) {
+          return;
+        }
+        const state = await checkNativeExactAlarmState(localNotifications);
+        if (state !== "denied") {
+          return;
+        }
+        try {
+          await localNotifications.changeExactNotificationSetting();
+        } catch (_) {}
+      }
+
+      async function syncNativeReminderSchedules() {
+        if (!isNativeNotificationRuntime()) {
+          return false;
+        }
+        const localNotifications = getCapacitorLocalNotificationsPlugin();
+        if (!localNotifications) {
+          return false;
+        }
+        try {
+          const permission = await localNotifications.checkPermissions();
+          if (permission.display !== "granted") {
+            return false;
+          }
+          await ensureNativeReminderChannel(localNotifications);
+          const exactState = await checkNativeExactAlarmState(localNotifications);
+          if (exactState === "denied") {
+            addSystemLog(
+              "[NOTICE] Exact alarms are disabled; reminders may be delayed by battery optimizations.",
+            );
+          }
+          const pending = await localNotifications.getPending();
+          const existing = (pending.notifications || [])
+            .filter((note) => note?.extra?.kind === "task-reminder")
+            .map((note) => ({ id: note.id }));
+          if (existing.length > 0) {
+            await localNotifications.cancel({ notifications: existing });
+          }
+          const notifications = buildNativeReminderNotifications();
+          if (notifications.length > 0) {
+            await localNotifications.schedule({ notifications });
+          }
+          return true;
+        } catch (err) {
+          addSystemLog(
+            `[NOTICE] Native reminder sync failed: ${err.message || String(err)}`,
+          );
+          return false;
+        }
+      }
+
+      async function refreshNativeNotificationButtonState(isLogged) {
+        if (!authNotifyBtn || !isLogged || !isNativeNotificationRuntime()) {
+          return;
+        }
+        const localNotifications = getCapacitorLocalNotificationsPlugin();
+        if (!localNotifications) {
+          return;
+        }
+        try {
+          const permission = await localNotifications.checkPermissions();
+          if (permission.display === "granted") {
+            authNotifyBtn.disabled = true;
+            authNotifyBtn.textContent = "Notifications On";
+            return;
+          }
+          if (permission.display === "denied") {
+            authNotifyBtn.disabled = true;
+            authNotifyBtn.textContent = "Notifications Blocked";
+            return;
+          }
+          authNotifyBtn.disabled = false;
+          authNotifyBtn.textContent = defaultNotifyBtnText;
+        } catch (_) {
+          authNotifyBtn.disabled = false;
+          authNotifyBtn.textContent = defaultNotifyBtnText;
+        }
+      }
+
+      let nativeNotificationListenersBound = false;
+      let nativePushListenersBound = false;
+      let lastNativePushToken = "";
+      async function bindNativeNotificationListeners() {
+        if (nativeNotificationListenersBound || !isNativeNotificationRuntime()) {
+          return;
+        }
+        const localNotifications = getCapacitorLocalNotificationsPlugin();
+        if (!localNotifications) {
+          return;
+        }
+        try {
+          await localNotifications.addListener(
+            "localNotificationActionPerformed",
+            () => {
+              setActiveView("quests");
+              window.location.hash = "quests";
+            },
+          );
+          nativeNotificationListenersBound = true;
+        } catch (_) {}
+      }
+
+      function getCapacitorPushNotificationsPlugin() {
+        return window.Capacitor?.Plugins?.PushNotifications || null;
+      }
+
+      function isNativePushRuntime() {
+        return Boolean(
+          window.Capacitor &&
+            typeof window.Capacitor.isNativePlatform === "function" &&
+            window.Capacitor.isNativePlatform() &&
+            getCapacitorPushNotificationsPlugin(),
+        );
+      }
+
+      function getPushInstallationId() {
+        try {
+          const existing = window.localStorage.getItem(PUSH_INSTALLATION_KEY);
+          if (existing) {
+            return existing;
+          }
+          const created = generateTaskId();
+          window.localStorage.setItem(PUSH_INSTALLATION_KEY, created);
+          return created;
+        } catch (_) {
+          return generateTaskId();
+        }
+      }
+
+      async function upsertCurrentUserPushDevice(tokenValue) {
+        if (
+          !db ||
+          !currentUserId ||
+          !tokenValue ||
+          typeof firebase === "undefined" ||
+          typeof firebase.firestore === "undefined"
+        ) {
+          return;
+        }
+        try {
+          const installationId = getPushInstallationId();
+          const platform =
+            (window.Capacitor &&
+              typeof window.Capacitor.getPlatform === "function" &&
+              window.Capacitor.getPlatform()) ||
+            "android";
+          await db
+            .collection("users")
+            .doc(currentUserId)
+            .collection("devices")
+            .doc(installationId)
+            .set(
+              {
+                installationId,
+                platform,
+                token: tokenValue,
+                notificationsEnabled: true,
+                updatedAtClient: new Date().toISOString(),
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+              },
+              { merge: true },
+            );
+        } catch (err) {
+          addSystemLog(
+            `[NOTICE] Push token sync failed: ${err.message || String(err)}`,
+          );
+        }
+      }
+
+      async function removeCurrentUserPushDeviceRegistration() {
+        if (!db || !currentUserId || !isNativePushRuntime()) {
+          return;
+        }
+        try {
+          const installationId = getPushInstallationId();
+          await db
+            .collection("users")
+            .doc(currentUserId)
+            .collection("devices")
+            .doc(installationId)
+            .delete();
+        } catch (_) {}
+      }
+
+      async function bindNativePushListeners() {
+        if (nativePushListenersBound || !isNativePushRuntime()) {
+          return;
+        }
+        const pushNotifications = getCapacitorPushNotificationsPlugin();
+        if (!pushNotifications) {
+          return;
+        }
+        try {
+          await pushNotifications.addListener("registration", async (token) => {
+            const tokenValue = String(token?.value || "");
+            if (!tokenValue) {
+              return;
+            }
+            lastNativePushToken = tokenValue;
+            await upsertCurrentUserPushDevice(tokenValue);
+            addSystemLog("[NOTICE] Push token registered for this device.");
+          });
+          await pushNotifications.addListener("registrationError", (error) => {
+            addSystemLog(
+              `[NOTICE] Push registration error: ${
+                error?.error || JSON.stringify(error)
+              }`,
+            );
+          });
+          await pushNotifications.addListener(
+            "pushNotificationActionPerformed",
+            () => {
+              setActiveView("quests");
+              window.location.hash = "quests";
+            },
+          );
+          nativePushListenersBound = true;
+        } catch (_) {}
+      }
+
+      async function syncNativePushRegistration() {
+        if (!isNativePushRuntime() || !currentUserId) {
+          return false;
+        }
+        const pushNotifications = getCapacitorPushNotificationsPlugin();
+        if (!pushNotifications) {
+          return false;
+        }
+        await bindNativePushListeners();
+        try {
+          let permission = await pushNotifications.checkPermissions();
+          if (permission.receive === "prompt") {
+            permission = await pushNotifications.requestPermissions();
+          }
+          if (permission.receive !== "granted") {
+            return false;
+          }
+          await pushNotifications.register();
+          if (lastNativePushToken) {
+            await upsertCurrentUserPushDevice(lastNativePushToken);
+          }
+          return true;
+        } catch (err) {
+          addSystemLog(
+            `[NOTICE] Push registration failed: ${err.message || String(err)}`,
+          );
+          return false;
+        }
+      }
+
+      async function sendTestPushToCurrentUser() {
+        if (!currentUserId) {
+          authStatus.textContent = "Login first to send test push.";
+          return;
+        }
+        if (!functionsApi || typeof functionsApi.httpsCallable !== "function") {
+          authStatus.textContent = "Cloud Functions is not configured in this app.";
+          return;
+        }
+        try {
+          authStatus.textContent = "Sending test push...";
+          await syncNativePushRegistration();
+          const call = functionsApi.httpsCallable("sendUserPush");
+          const now = new Date();
+          const payload = {
+            userId: currentUserId,
+            title: "PMB Test Push",
+            body: `Test sent at ${now.toLocaleTimeString("en-US", {
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+            })}`,
+            data: {
+              kind: "manual-test",
+              screen: "quests",
+              sentAt: now.toISOString(),
+            },
+          };
+          const result = await call(payload);
+          const sent = Number(result?.data?.sent || 0);
+          const failed = Number(result?.data?.failed || 0);
+          const removed = Number(result?.data?.removedTokens || 0);
+          authStatus.textContent = `Test push sent. success=${sent}, failed=${failed}, cleaned=${removed}`;
+          addSystemLog(
+            `[NOTICE] Test push request completed. success=${sent}, failed=${failed}, cleaned=${removed}`,
+          );
+        } catch (err) {
+          authStatus.textContent = `Test push failed: ${err.message || String(err)}`;
+          addSystemLog(
+            `[NOTICE] Test push failed: ${err.message || String(err)}`,
+          );
+        }
+      }
 
       function setActiveView(target) {
         const safeTarget = [
@@ -2977,6 +3529,12 @@
           return;
         }
         authNotifyBtn.style.display = "";
+        if (isNativeNotificationRuntime()) {
+          authNotifyBtn.disabled = false;
+          authNotifyBtn.textContent = defaultNotifyBtnText;
+          void refreshNativeNotificationButtonState(isLogged);
+          return;
+        }
         if (!("Notification" in window)) {
           authNotifyBtn.disabled = true;
           authNotifyBtn.textContent = "Notifications Unsupported";
@@ -2997,6 +3555,37 @@
       }
 
       async function requestNotificationAccess(source) {
+        if (isNativeNotificationRuntime()) {
+          const localNotifications = getCapacitorLocalNotificationsPlugin();
+          if (!localNotifications) {
+            authStatus.textContent = "Notifications are unavailable.";
+            updateNotificationButtonState(Boolean(currentUserId));
+            return;
+          }
+          try {
+            let permission = await localNotifications.checkPermissions();
+            if (permission.display !== "granted") {
+              permission = await localNotifications.requestPermissions();
+            }
+            if (permission.display === "granted") {
+              authStatus.textContent = "Notifications enabled.";
+              addSystemLog("[NOTICE] Notifications enabled.");
+              await maybePromptExactAlarmAccess(localNotifications, source);
+              await syncNativeReminderSchedules();
+              await syncNativePushRegistration();
+            } else if (source === "login") {
+              authStatus.textContent =
+                "Notification permission skipped. You can enable it with the button.";
+            } else {
+              authStatus.textContent =
+                "Notification permission not granted. You can try again from the button.";
+            }
+          } catch (err) {
+            authStatus.textContent = `Notification permission failed: ${err.message}`;
+          }
+          updateNotificationButtonState(Boolean(currentUserId));
+          return;
+        }
         if (!("Notification" in window)) {
           authStatus.textContent = "Notifications are not supported on this browser.";
           updateNotificationButtonState(Boolean(currentUserId));
@@ -3053,6 +3642,8 @@
           authSyncBtn.disabled = true;
           authNotifyBtn.style.display = "none";
           authNotifyBtn.disabled = true;
+          authTestPushBtn.style.display = "none";
+          authTestPushBtn.disabled = true;
           return;
         }
         if (!firebase.apps.length) {
@@ -3060,6 +3651,8 @@
         }
         const auth = firebase.auth();
         db = firebase.firestore();
+        functionsApi =
+          typeof firebase.functions === "function" ? firebase.functions() : null;
         const provider = new firebase.auth.GoogleAuthProvider();
         provider.setCustomParameters({ prompt: "select_account" });
         auth
@@ -3078,6 +3671,8 @@
           authLogoutBtn.disabled = !isLogged;
           authSyncBtn.style.display = isLogged ? "" : "none";
           authSyncBtn.disabled = !isLogged;
+          authTestPushBtn.style.display = isLogged ? "" : "none";
+          authTestPushBtn.disabled = !isLogged;
           updateNotificationButtonState(isLogged);
           authSyncStatus.textContent = isLogged
             ? "SYNC: loading cloud data..."
@@ -3088,6 +3683,10 @@
               notificationPromptedUsers.add(user.uid);
               await requestNotificationAccess("login");
             }
+            await syncNativeReminderSchedules();
+            await syncNativePushRegistration();
+          } else {
+            await syncNativeReminderSchedules();
           }
         });
 
@@ -3101,6 +3700,16 @@
 
         authLogoutBtn.addEventListener("click", async () => {
           try {
+            await removeCurrentUserPushDeviceRegistration();
+            if (isNativePushRuntime()) {
+              const pushNotifications = getCapacitorPushNotificationsPlugin();
+              if (
+                pushNotifications &&
+                typeof pushNotifications.unregister === "function"
+              ) {
+                await pushNotifications.unregister();
+              }
+            }
             await auth.signOut();
             authStatus.textContent = "Logged out";
           } catch (err) {
@@ -3116,6 +3725,8 @@
           authSyncStatus.textContent = "SYNC: syncing...";
           await saveUserData();
           await loadUserData(currentUserId);
+          await syncNativeReminderSchedules();
+          await syncNativePushRegistration();
         });
         authNotifyBtn.addEventListener("click", async () => {
           if (!currentUserId) {
@@ -3123,6 +3734,9 @@
             return;
           }
           await requestNotificationAccess("manual");
+        });
+        authTestPushBtn.addEventListener("click", async () => {
+          await sendTestPushToCurrentUser();
         });
 
       }
@@ -3455,7 +4069,10 @@
       }
 
       function questItemToData(item) {
+        const taskId = ensureTaskId(item);
+        const reminder = getReminderFromTaskDataset(item);
         return {
+          taskId,
           title: item.querySelector(".name")?.textContent || "Untitled",
           reps: item.querySelector(".quest-reps")?.textContent || "0",
           attrKey: getAttrFromItem(item),
@@ -3464,14 +4081,16 @@
           completed: item.dataset.completed === "true",
           appliedXp: Number.parseInt(item.dataset.appliedXp || "0", 10) || 0,
           completedAt: item.dataset.completedAt || "",
-          reminderOn: item.dataset.reminderOn === "true",
-          reminderTime: item.dataset.reminderTime || "09:00",
-          reminderDays: item.dataset.reminderDays || "",
-          reminderMsg: item.dataset.reminderMsg || "",
+          reminder,
+          reminderOn: reminder.enabled,
+          reminderTime: reminder.time24,
+          reminderDays: reminder.days.join(","),
+          reminderMsg: reminder.message,
         };
       }
 
       function applyQuestData(data) {
+        const reminder = buildReminderFromAny(data.reminder, data);
         const baseXp = Number.parseInt(String(data.baseXp || data.xp || "0"), 10) || 0;
         const adjustedXp = effectiveTaskXp(baseXp);
         const item = createQuestItem({
@@ -3489,10 +4108,8 @@
         item.dataset.completedAt = completed
           ? String(data.completedAt || "")
           : "";
-        item.dataset.reminderOn = data.reminderOn ? "true" : "false";
-        item.dataset.reminderTime = String(data.reminderTime || "09:00");
-        item.dataset.reminderDays = String(data.reminderDays || "");
-        item.dataset.reminderMsg = String(data.reminderMsg || "");
+        item.dataset.taskId = String(data.taskId || data.id || generateTaskId());
+        applyReminderToTaskDataset(item, reminder);
         if (completed) {
           item.classList.add("completed");
           const doneBtn = item.querySelector('[data-action="done"]');
@@ -3520,6 +4137,8 @@
           (hunterNameInput.value || "").trim() || authName || "Sung Jinwoo";
         const nowIso = new Date().toISOString();
         const payload = {
+          schemaVersion: 2,
+          reminderSchemaVersion: REMINDER_SCHEMA_VERSION,
           name: cleanName,
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
           trueLevel,
@@ -3633,6 +4252,7 @@
           renderLevel();
           renderAnalytics();
           renderAchievements();
+          void syncNativeReminderSchedules();
         }
       }
 
@@ -4032,15 +4652,18 @@
         const attribute = attributeLabel[attrKey] || attrKey;
         const item = document.createElement("article");
         item.className = `quest-item attr-${String(attrKey).toLowerCase()}`;
+        item.dataset.taskId = generateTaskId();
         item.dataset.baseXp = String(baseXp);
         item.dataset.xp = String(xp);
         item.dataset.appliedXp = "0";
         item.dataset.completed = "false";
         item.dataset.completedAt = "";
         item.dataset.reminderOn = "false";
-        item.dataset.reminderTime = "09:00";
+        item.dataset.reminderTime = DEFAULT_REMINDER_TIME;
         item.dataset.reminderDays = "";
         item.dataset.reminderMsg = "";
+        item.dataset.reminderTimezone =
+          Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
         item.innerHTML = `
         <div class="quest-left">
           <span aria-hidden="true">&#9876;</span>
@@ -4128,6 +4751,7 @@
         renderAnalytics();
         renderAchievements();
         queueSaveUserData();
+        void syncNativeReminderSchedules();
 
         taskTitleInput.value = "";
         repsInput.value = "";
@@ -4182,6 +4806,7 @@
           renderAnalytics();
           renderAchievements();
           queueSaveUserData();
+          void syncNativeReminderSchedules();
           return;
         }
 
@@ -4242,12 +4867,8 @@
         const isOn = editReminderToggle.classList.contains("on");
         editReminderBlock.classList.toggle("hidden", !isOn);
         editPanel.classList.toggle("reminder-on", isOn);
-        if (
-          editReminderToggle.classList.contains("on") &&
-          "Notification" in window &&
-          Notification.permission === "default"
-        ) {
-          Notification.requestPermission();
+        if (editReminderToggle.classList.contains("on")) {
+          void requestNotificationAccess("edit");
         }
       });
       editTimeClear.addEventListener("click", () => {
@@ -4287,14 +4908,18 @@
         )
           ? "true"
           : "false";
-        editingTask.dataset.reminderTime = getTime24FromSelectors();
         const selectedDays = Array.from(
           editDays.querySelectorAll(".e-day.active"),
         ).map((d) => d.textContent);
-        editingTask.dataset.reminderDays = selectedDays.join(",");
-        editingTask.dataset.reminderMsg = editMessageInput.value.trim();
+        applyReminderToTaskDataset(editingTask, {
+          enabled: editingTask.dataset.reminderOn === "true",
+          time24: getTime24FromSelectors(),
+          days: selectedDays,
+          message: editMessageInput.value.trim(),
+        });
         closeEditModal();
         queueSaveUserData();
+        void syncNativeReminderSchedules();
       });
       editModal.addEventListener("click", (event) => {
         if (event.target === editModal) {
@@ -4615,13 +5240,17 @@
       }
 
       function maybeFireNotifications() {
+        if (isNativeNotificationRuntime()) {
+          return;
+        }
         const now = new Date();
         questList.querySelectorAll(".quest-item").forEach((task, idx) => {
           const slotKey = shouldNotifyTask(task, now);
           if (!slotKey) {
             return;
           }
-          const key = `${slotKey}-${idx}-${task.querySelector(".name")?.textContent || "task"}`;
+          const taskId = task.dataset.taskId || `task-${idx}`;
+          const key = `${slotKey}-${taskId}`;
           if (firedNotificationKeys.has(key)) {
             return;
           }
@@ -4639,7 +5268,7 @@
               body,
               icon: notificationIcon,
               badge: notificationIcon,
-              tag: `quest-${idx}-${title}`,
+              tag: `quest-${taskId}`,
               renotify: true,
               vibrate: [120, 50, 120],
               timestamp: Date.now(),
@@ -4898,6 +5527,10 @@
       seedDefaultTasks();
       applyDailyPenaltyIfDue();
       initFirebaseAuth();
+      void bindNativeNotificationListeners();
+      void bindNativePushListeners();
+      void syncNativeReminderSchedules();
+      void syncNativePushRegistration();
       renderAnalytics();
     renderAchievements();
     queueSaveUserData();
@@ -4905,11 +5538,21 @@
     initShadowSummon();
     initLevelParticles();
     setInterval(maybeFireNotifications, 15000);
-    window.addEventListener("focus", maybeFireNotifications);
-    window.addEventListener("pageshow", maybeFireNotifications);
+    window.addEventListener("focus", () => {
+      maybeFireNotifications();
+      void syncNativeReminderSchedules();
+      void syncNativePushRegistration();
+    });
+    window.addEventListener("pageshow", () => {
+      maybeFireNotifications();
+      void syncNativeReminderSchedules();
+      void syncNativePushRegistration();
+    });
     document.addEventListener("visibilitychange", () => {
       if (!document.hidden) {
         maybeFireNotifications();
+        void syncNativeReminderSchedules();
+        void syncNativePushRegistration();
       }
     });
 
