@@ -9,3 +9,4 @@ node_modules/
 www/
 android/.gradle/
 android/local.properties
+android/app/google-services.json

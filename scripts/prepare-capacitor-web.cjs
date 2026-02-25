@@ -15,7 +15,8 @@ const files = [
   "sw.js",
 ];
 
-const dirs = ["assets", "config"];
+const dirs = ["assets"];
+const configFiles = ["firebase.public.js", "firebase.runtime.js"];
 
 function rmrf(target) {
   if (fs.existsSync(target)) {
@@ -61,6 +62,13 @@ for (const file of files) {
 
 for (const dir of dirs) {
   copyDirRecursive(path.join(root, dir), path.join(outDir, dir));
+}
+
+for (const file of configFiles) {
+  copyFileSafe(
+    path.join(root, "config", file),
+    path.join(outDir, "config", file),
+  );
 }
 
 console.log("Prepared Capacitor web assets in ./www");
