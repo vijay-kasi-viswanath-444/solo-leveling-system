@@ -4,9 +4,10 @@
   },
   "hosting": {
     "predeploy": [
-      "node scripts/generate-firebase-config.mjs"
+      "node scripts/generate-firebase-config.mjs",
+      "npm run build:web"
     ],
-    "public": ".",
+    "public": "www",
     "ignore": [
       "firebase.json",
       "config/firebase.local.js",
